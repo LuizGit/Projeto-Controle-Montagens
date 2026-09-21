@@ -10,6 +10,7 @@ import {
     ActivityIndicator 
 } from 'react-native';
 import api from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Login({ navigation }) {
     const [nome, setNome] = useState('');
@@ -31,6 +32,9 @@ export default function Login({ navigation }) {
             });
 
             const { token, usuario } = resposta.data;
+
+            await AsyncStorage.setItem('@Nortfer:token', token);
+            await AsyncStorage.setItem('@Nortfer:usuario', JSON.stringify(usuario));
 
             navigation.replace('Home', { usuario, token });
             

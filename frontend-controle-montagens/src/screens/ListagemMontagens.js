@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, Alert, TouchableOpacity, Modal } from 'react-native';
 import api from '../services/api';
 
-export default function ListagemMontagens({ route }) {
+export default function ListagemMontagens({ route, navigation }) {
     // Pega o perfil do usuário logado enviado pela navegação
     const { usuario, token } = route.params;
 
@@ -159,6 +159,15 @@ export default function ListagemMontagens({ route }) {
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitulo}>Alterar Status da Montagem</Text>
                         <Text style={styles.modalSubtitulo}>Cliente: {montagemSelecionada?.Cliente}</Text>
+
+                        <TouchableOpacity 
+                            style={[styles.modalBotaoOpcao, { backgroundColor: '#005483', marginBottom: 25 }]} 
+                            onPress={() => {setModalVisivel(false);
+                                navigation.navigate('ProgramarMontagem', { montagem: montagemSelecionada, token });
+                            }}
+                        >
+                            <Text style={styles.modalBotaoTexto}>📅 PROGRAMAR MONTAGEM</Text>
+                        </TouchableOpacity>
 
                         <TouchableOpacity style={[styles.modalBotaoOpcao, { backgroundColor: '#E53E3E' }]} onPress={() => handleAlterarStatus(1)}>
                             <Text style={styles.modalBotaoTexto}>PENDENTE</Text>

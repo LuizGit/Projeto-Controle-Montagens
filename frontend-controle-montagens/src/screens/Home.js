@@ -1,11 +1,17 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 export default function Home({ route, navigation }) {
     // Pega os dados do usuário enviados através da navegação
     const { usuario, token } = route.params || { usuario: { nome: 'Usuário', admin: false } };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        // 🧹 Limpa os registros de login armazenados no celular
+        await AsyncStorage.removeItem('@Nortfer:token');
+        await AsyncStorage.removeItem('@Nortfer:usuario');
+        
         // Volta para a tela de Login limpando o histórico
         navigation.replace('Login');
     };
@@ -21,10 +27,16 @@ export default function Home({ route, navigation }) {
             {/* Menu Condicional: Só aparece se o usuário logado for ADMIN */}
             {usuario.admin && (
                 <View style={styles.menuAdmin}>
-                    <TouchableOpacity style={styles.botao}>
-                        <Text style={styles.botaoTexto}>⚙️ CADASTRAR NOVO USUÁRIO</Text>
+                    <TouchableOpacity 
+                        style={styles.botao}
+                        onPress={() => navigation.navigate('AlterarSenhaUsuario', { token })}
+                    >
+                        <Text style={styles.botaoTexto}>⚙️ GERENCIAR SENHA DOS MONTADORES</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.botao}>
+                    <TouchableOpacity 
+                        style={styles.botao}
+                        onPress={() => navigation.navigate('CadastroMontagem', { token })}
+                    >
                         <Text style={styles.botaoTexto}>➕ NOVA ORDEM DE MONTAGEM</Text>
                     </TouchableOpacity>
                 </View>

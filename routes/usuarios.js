@@ -22,12 +22,45 @@ module.exports = (db) => {
         }
     });
 
-    // Listar todos os Usuários
+    // Listar todos os Usuários que forem ativos e não forem admins
     router.get('/', verificarToken, apenasAdmin, (req, res) => {
-        db.query('SELECT Id, Nome, Admin, Ativo FROM Usuario', (err, results) => {
+        // Filtra para trazer apenas Montadores (Admin = 0) e que estejam Ativos (Ativo = 1)
+        const query = 'SELECT Id, Nome FROM Usuario WHERE Admin = 0 AND Ativo = 1';
+        
+        db.query(query, (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(results);
         });
+    });
+
+    //Atualizar senha de usuarios montadores
+    router.patch('/:id/senha', verificarToken, apenasAdmin, async (req, res) => {
+        const { id } = req.params;
+        const { NovaSenha } = req.body;
+
+        if (!NovaSenha || NovaSenha.trim().length < 4) {
+            return res.status(400).json({ error: 'A nova senha deve ter pelo menos 4 caracteres.' });
+        }
+
+        try {
+            // Gera a criptografia forte da nova senha antes de salvar
+            const senhaCriptografada = await bcrypt.hash(NovaSenha, 10);
+            
+            // Query com trava de segurança dupla: só atualiza se Admin for 0
+            const query = 'UPDATE Usuario SET Senha = ? WHERE Id = ? AND Admin = 0';
+            
+            db.query(query, [senhaCriptografada, id], (err, result) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                if (result.affectedRows === 0) {
+                    return res.status(403).json({ error: 'Operação não permitida ou Usuário não encontrado.' });
+                }
+                
+                res.json({ message: 'Senha do montador atualizada com sucesso!' });
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Erro ao processar a criptografia da senha.' });
+        }
     });
 
     // Atualizar Usuário
