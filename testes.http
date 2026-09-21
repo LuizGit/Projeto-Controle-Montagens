@@ -1,0 +1,122 @@
+### 1. Cadastrar um Status (Necessário para a Montagem)
+POST http://localhost:3000/status
+Content-Type: application/json
+
+{
+    "Descricao": "Pendente"
+}
+
+### 2. Cadastrar outro Status
+POST http://localhost:3000/status
+Content-Type: application/json
+
+{
+    "Descricao": "Em Andamento"
+}
+
+### 3. Listar todos os Status cadastrados
+GET http://localhost:3000/status
+
+###
+
+### 4. Cadastrar Usuário (Montador 1)
+POST http://localhost:3000/usuarios
+Content-Type: application/json
+
+{
+    "Nome": "Rafael Alexandre",
+    "Senha": "HarleyDavidson",
+    "Admin": false,
+    "Ativo": true
+}
+
+### 5. Cadastrar Usuário (Montador 2)
+POST http://localhost:3000/usuarios
+Content-Type: application/json
+
+{
+    "Nome": "Valdecir",
+    "Senha": "nego",
+    "Admin": true,
+    "Ativo": true
+}
+
+### 6. Listar todos os Usuários
+GET http://localhost:3000/usuarios
+
+###
+
+### 7. Criar uma Nova Montagem (Usando IDs criados acima)
+POST http://localhost:3000/montagens
+Content-Type: application/json
+
+{
+    "Orcamento": 1572610,
+    "Cliente": "Lagoinha",
+    "Status_Id": 1,
+    "Data_entrada": "2026-08-20",
+    "Data_entrega": "2026-10-20",
+    "Montador_1": 1,
+    "Montador_2": 2,
+    "Local": "Av. Nações Unidas, 31-40 - Jardim Panorama, Bauru - SP, 17012-202"
+}
+
+### 8. Listar todas as Montagens (Com as informações unidas)
+GET http://localhost:3000/montagens
+
+### 9. Cadastrar NOVO Usuário (Agora com senha protegida)
+POST http://localhost:3000/usuarios
+Content-Type: application/json
+
+{
+    "Nome": "teste",
+    "Senha": "teste1",
+    "Admin": true,
+    "Ativo": true
+}
+
+### 10. Testar Login com Sucesso (Clique em Send Request)
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+    "Nome": "teste",
+    "Senha": "teste1"
+}
+
+### 11. Cadastrar um Montador Comum (Admin: false)
+POST http://localhost:3000/usuarios
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OCwibm9tZSI6InRlc3RlIiwiYWRtaW4iOjEsImlhdCI6MTc4OTc1OTA0NCwiZXhwIjoxNzg5Nzg3ODQ0fQ.92IcnITRDwk78lLd3zUxTZYmXsaAo_SN145tLbOM_uc
+Content-Type: application/json
+
+{
+    "Nome": "Marlon",
+    "Senha": "marlin",
+    "Admin": false,
+    "Ativo": true
+}
+
+### 12. Login com o João Montador (Copie o token gerado na resposta)
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+    "Nome": "João Montador",
+    "Senha": "montador_123"
+}
+
+### 13. Testar Criar Montagem com o Token do João (DEVE DAR ERRO 403)
+POST http://localhost:3000/montagens
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OSwibm9tZSI6Ikpvw6NvIE1vbnRhZG9yIiwiYWRtaW4iOjAsImlhdCI6MTc4OTc0NDk2OCwiZXhwIjoxNzg5NzczNzY4fQ.KLgXSp1vnm0Vd8NX4_6wg-yborWclzoCapkhjxeMGKI
+Content-Type: application/json
+
+{
+    "Orcamento": 2800,
+    "Cliente": "Teste montagem 2",
+    "Status_Id": 1,
+    "Data_entrada": "2026-09-18",
+    "Data_entrega": null,
+    "Montador_1": 3,
+    "Montador_2": null,
+    "Local": "Av Central, 500"
+}
