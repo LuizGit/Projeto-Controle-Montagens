@@ -69,8 +69,8 @@ POST http://localhost:3000/usuarios
 Content-Type: application/json
 
 {
-    "Nome": "teste",
-    "Senha": "teste1",
+    "Nome": "Carlos",
+    "Senha": "Admin2026",
     "Admin": true,
     "Ativo": true
 }
@@ -86,12 +86,12 @@ Content-Type: application/json
 
 ### 11. Cadastrar um Montador Comum (Admin: false)
 POST http://localhost:3000/usuarios
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OCwibm9tZSI6InRlc3RlIiwiYWRtaW4iOjEsImlhdCI6MTc4OTc1OTA0NCwiZXhwIjoxNzg5Nzg3ODQ0fQ.92IcnITRDwk78lLd3zUxTZYmXsaAo_SN145tLbOM_uc
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OCwibm9tZSI6InRlc3RlIiwiYWRtaW4iOjEsImlhdCI6MTc5MDAxNjM1NCwiZXhwIjoxNzkwMDQ1MTU0fQ.vDd__mKBMuaKqANKUwJK9NY1jqaya_4Ss1Mi5otHrs8
 Content-Type: application/json
 
 {
-    "Nome": "Marlon",
-    "Senha": "marlin",
+    "Nome": "Anderson",
+    "Senha": "anderson",
     "Admin": false,
     "Ativo": true
 }

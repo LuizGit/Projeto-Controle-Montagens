@@ -17,22 +17,20 @@ export default function CadastroMontagem({ route, navigation }) {
     const [orcamento, setOrcamento] = useState('');
     const [cliente, setCliente] = useState('');
     const [local, setLocal] = useState('');
-    const [statusId, setStatusId] = useState('1'); 
-    const [dataEntrada, setDataEntrada] = useState(''); // 📅 Novo estado para a data de entrada
+    const [dataEntrada, setDataEntrada] = useState('');
     const [carregando, setCarregando] = useState(false);
 
-    // Quando a tela abre, ela preenche o campo automaticamente com a data de hoje
+    // Preenche o campo automaticamente com a data de hoje
     useEffect(() => {
         const hoje = new Date();
         const dia = String(hoje.getDate()).padStart(2, '0');
-        const mes = String(hoje.getMonth() + 1).padStart(2, '0'); // Janeiro é 0
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
         const ano = hoje.getFullYear();
-        setDataEntrada(`${dia}/${mes}/${ano}`); // Formato brasileiro padrão (DD/MM/AAAA)
+        setDataEntrada(`${dia}/${mes}/${ano}`);
     }, []);
 
-    // Função simples para colocar as barras "/" automaticamente enquanto digita
+    // Aplica a máscara de barras "/" na data automaticamente
     const handleDataChange = (texto) => {
-        // Remove tudo que não for número
         const apenasNumeros = texto.replace(/\D/g, '');
         let dataFormatada = apenasNumeros;
 
@@ -50,7 +48,6 @@ export default function CadastroMontagem({ route, navigation }) {
             return;
         }
 
-        // Valida se a data está no tamanho correto (DD/MM/AAAA tem 10 caracteres)
         if (dataEntrada.length !== 10) {
             Alert.alert('Data Inválida', 'Por favor, digite a data completa no formato DD/MM/AAAA.');
             return;
@@ -58,7 +55,7 @@ export default function CadastroMontagem({ route, navigation }) {
 
         setCarregando(true);
 
-        // Conversão do formato brasileiro (DD/MM/AAAA) para o formato do MySQL (AAAA-MM-DD)
+        // Conversão do formato brasileiro (DD/MM/AAAA) para o MySQL (AAAA-MM-DD)
         const [dia, mes, ano] = dataEntrada.split('/');
         const dataParaO_Banco = `${ano}-${mes}-${dia}`;
 
@@ -67,11 +64,12 @@ export default function CadastroMontagem({ route, navigation }) {
                 headers: { Authorization: `Bearer ${token}` }
             };
 
+            // Envia a requisição POST travando o Status_Id obrigatoriamente em 1 (Pendente)
             await api.post('/montagens', {
                 Orcamento: parseInt(orcamento),
                 Cliente: cliente,
-                Status_Id: parseInt(statusId),
-                Data_entrada: dataParaO_Banco, // Envia a data convertida com sucesso
+                Status_Id: 1, // 🔒 TRAVADO EM 1 (PENDENTE) PARA SEGURANÇA DA REGRA DE NEGÓCIO
+                Data_entrada: dataParaO_Banco,
                 Data_entrega: null,
                 Montador_1: 1, 
                 Montador_2: null,
@@ -114,14 +112,13 @@ export default function CadastroMontagem({ route, navigation }) {
                 onChangeText={setCliente}
             />
 
-            {/* 📅 NOVO CAMPO: TEXTINPUT DA DATA DE ENTRADA */}
             <Text style={styles.label}>Data de Entrada *</Text>
             <TextInput 
                 style={styles.input}
                 placeholder="DD/MM/AAAA"
                 placeholderTextColor="#999"
                 keyboardType="numeric"
-                maxLength={10} // Impede digitar mais do que o limite da data
+                maxLength={10}
                 value={dataEntrada}
                 onChangeText={handleDataChange}
             />
@@ -135,24 +132,7 @@ export default function CadastroMontagem({ route, navigation }) {
                 onChangeText={setLocal}
             />
 
-            <Text style={styles.label}>Status Inicial de Montagem</Text>
-            <View style={styles.statusBotoes}>
-                <TouchableOpacity 
-                    style={[styles.statusBotao, statusId === '1' && styles.statusAtivoPendente]} 
-                    onPress={() => setStatusId('1')}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[styles.statusTexto, statusId === '1' && styles.textoAtivo]}>Pendente</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                    style={[styles.statusBotao, statusId === '2' && styles.statusAtivoAgendado]} 
-                    onPress={() => setStatusId('2')}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[styles.statusTexto, statusId === '2' && styles.textoAtivo]}>Agendado</Text>
-                </TouchableOpacity>
-            </View>
+            {/* 🔒 NOTA: O bloco visual "Status Inicial" foi removido inteiramente daqui */}
 
             <TouchableOpacity style={styles.botaoSalvar} onPress={handleSalvar} disabled={carregando}>
                 {carregando ? (
@@ -171,12 +151,6 @@ const styles = StyleSheet.create({
     titulo: { fontSize: 22, fontWeight: 'bold', color: '#005483', marginBottom: 25, textAlign: 'center', letterSpacing: 0.5 },
     label: { fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 6 },
     input: { width: '100%', height: 50, backgroundColor: '#F7FAFC', borderRadius: 8, paddingHorizontal: 15, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', fontSize: 16, color: '#333' },
-    statusBotoes: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 35 },
-    statusBotao: { width: '48%', height: 48, borderWidth: 1, borderColor: '#CBD5E0', borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7FAFC' },
-    statusAtivoPendente: { backgroundColor: '#E53E3E', borderColor: '#E53E3E' },
-    statusAtivoAgendado: { backgroundColor: '#3182CE', borderColor: '#3182CE' },
-    statusTexto: { fontSize: 14, fontWeight: 'bold', color: '#4A5568' },
-    textoAtivo: { color: '#FFFFFF' },
-    botaoSalvar: { width: '100%', height: 55, backgroundColor: '#005483', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 10, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 },
+    botaoSalvar: { width: '100%', height: 55, backgroundColor: '#005483', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 15, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 },
     botaoTexto: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', letterSpacing: 0.5 }
 });

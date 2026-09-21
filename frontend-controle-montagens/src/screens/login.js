@@ -12,6 +12,8 @@ import {
 import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import logoNortfer from '../assets/logo.png';
+
 export default function Login({ navigation }) {
     const [nome, setNome] = useState('');
     const [senha, setSenha] = useState('');
@@ -94,10 +96,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 20,
     },
+    logoContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: 120,       // Força um espaço vertical real para a logo existir
+        marginBottom: 30,  // Afasta os inputs para baixo
+    },
     logo: {
-        width: 280,
-        height: 180,
-        marginBottom: 20,
+        width: 260,
+        height: 90,
+        backgroundColor: '#000', // 🛠️ Teste rápido: se ela aparecer, a logo é branca!
     },
     titulo: {
         fontSize: 20,

@@ -24,6 +24,7 @@ module.exports = (db) => {
             LEFT JOIN Status s ON m.Status_Id = s.Id
             LEFT JOIN Usuario u1 ON m.Montador_1 = u1.Id
             LEFT JOIN Usuario u2 ON m.Montador_2 = u2.Id
+            ORDER BY m.Id DESC
         `;
 
         // Consulta 2: Calcula o Dashboard (Acessível por essa rota de forma leve)
