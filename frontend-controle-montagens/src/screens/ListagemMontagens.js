@@ -30,8 +30,16 @@ export default function ListagemMontagens({ route, navigation }) {
             
             // Guardamos a lista completa vinda do MySQL
             setTodasMontagens(resposta.data.montagens || []);
-            setDashboard(resposta.data.dashboard || { Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
+
+            const dadosDash = Array.isArray(resposta.data.dashboard) 
+            ? resposta.data.dashboard[0] 
+            : resposta.data.dashboard;
+
+            setDashboard(dadosDash || { Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
         } catch (error) {
+            console.log("=== 🚨 FALHA DE REQUISIÇÃO NO MOBILE ===");
+            console.log("Status do Erro:", error.response?.status);
+            console.log("Detalhes da API:", error.response?.data);
             Alert.alert('Erro', 'Não foi possível carregar as informações.');
         } finally {
             setCarregando(false);
@@ -76,28 +84,56 @@ export default function ListagemMontagens({ route, navigation }) {
         setModalVisivel(true);
     };
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity 
-            style={styles.card} 
-            onPress={() => abrirModalStatus(item)} 
-            activeOpacity={usuario.admin ? 0.7 : 1}
-            disabled={!usuario.admin}
-        >
-            <View style={styles.cardLinha}>
-                <Text style={styles.cardCliente}>{item.Cliente}</Text>
-                <Text style={styles.cardOrcamento}> {item.Orcamento}</Text>
-            </View>
-            <Text style={styles.cardTexto}>📍 Local: {item.Local || 'Não informado'}</Text>
-            <Text style={styles.cardTexto}>🛠️ Montador: {item.Nome_Montador_1 || 'Sem montador'}</Text>
-            
-            <View style={styles.cardFooter}>
-                <View style={[styles.badge, { backgroundColor: obterCorStatus(item.Status_Nome) }]}>
-                    <Text style={styles.badgeTexto}>{item.Status_Nome ? item.Status_Nome.toUpperCase() : 'PENDENTE'}</Text>
+    const renderItem = ({ item }) => {
+        // Função interna para formatar a data que vem do MySQL (AAAA-MM-DD) para (DD/MM/AAAA)
+        const formatarData = (dataSql) => {
+            if (!dataSql) return null;
+            // Corta apenas a parte da data caso venha com o formato de data e hora do banco
+            const dataLimpa = dataSql.split('T')[0];
+            const [ano, mes, dia] = dataLimpa.split('-');
+            return `${dia}/${mes}/${ano}`;
+        };
+
+        const dataInicioFormatada = formatarData(item.Data_entrega);
+
+        return (
+            <TouchableOpacity 
+                style={styles.card} 
+                onPress={() => abrirModalStatus(item)} 
+                activeOpacity={usuario.admin ? 0.7 : 1}
+                disabled={!usuario.admin}
+            >
+                <View style={styles.cardLinha}>
+                    <Text style={styles.cardCliente}>{item.Cliente}</Text>
+                    <Text style={styles.cardOrcamento}> {item.Orcamento}</Text>
                 </View>
-                {usuario.admin && <Text style={styles.CliqueTexto}>Clique para opções 🔄</Text>}
-            </View>
-        </TouchableOpacity>
-    );
+                <Text style={styles.cardTexto}>📍 Local: {item.Local || 'Não informado'}</Text>
+                
+                {/* 🛠️ EXIBIÇÃO DOS MONTADORES: Mostra o principal e o auxiliar (se houver) */}
+                <Text style={styles.cardTexto}>
+                🛠️ Equipe: {
+                    !item.Nome_Montador_1 && !item.Nome_Montador_2 
+                        ? 'Sem montador designado' 
+                        : `${item.Nome_Montador_1 || 'Não informado'}${item.Nome_Montador_2 ? ` / ${item.Nome_Montador_2}` : ''}`
+                    }
+                </Text>
+
+                {/* 📅 EXIBIÇÃO DA DATA DE INÍCIO: Condicional (Só renderiza se tiver uma data salva) */}
+                {dataInicioFormatada && (
+                    <Text style={[styles.cardTexto, { fontWeight: '600', color: '#005483' }]}>
+                        📅 Início: {dataInicioFormatada}
+                    </Text>
+                )}
+                
+                <View style={styles.cardFooter}>
+                    <View style={[styles.badge, { backgroundColor: obterCorStatus(item.Status_Nome) }]}>
+                        <Text style={styles.badgeTexto}>{item.Status_Nome ? item.Status_Nome.toUpperCase() : 'PENDENTE'}</Text>
+                    </View>
+                    {usuario.admin && <Text style={styles.CliqueTexto}>Clique para opções 🔄</Text>}
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     // Componente de Rodapé da Lista (Botão Ver Mais)
     const renderFooter = () => {
@@ -132,51 +168,51 @@ export default function ListagemMontagens({ route, navigation }) {
 
     return (
         <View style={styles.container}>
-            {/* 📊 DASHBOARD: Cartões agora são clicáveis para filtrar a lista */}
-            {usuario.admin && (
-                <View style={styles.dashboardContainer}>
-                    <Text style={styles.dashboardTitulo}>
-                        Resumo de Montagens {statusFiltrado ? `(Filtrado: ${statusFiltrado})` : '(Todos)'}
-                    </Text>
-                    <View style={styles.dashboardGrid}>
-                        {/* CARD PENDENTE */}
+            {/* 📊 DASHBOARD: Exibido para todos, mudando a largura dos cards para montadores de forma fluida */}
+            <View style={styles.dashboardContainer}>
+                <Text style={styles.dashboardTitulo}>
+                    Resumo de Montagens {statusFiltrado ? `(Filtrado: ${statusFiltrado})` : '(Todos)'}
+                </Text>
+                <View style={styles.dashboardGrid}>
+                    {/* CARD PENDENTE: Renderizado EXCLUSIVAMENTE se for administrador */}
+                    {usuario.admin && (
                         <TouchableOpacity 
-                            style={[styles.dashCard, { borderColor: '#E53E3E' }, statusFiltrado === 'Pendente' && styles.dashCardAtivo]} 
+                            style={[styles.dashCard, { borderColor: '#E53E3E', width: '23%' }, statusFiltrado === 'Pendente' && styles.dashCardAtivo]} 
                             onPress={() => alternarFiltroStatus('Pendente')}
                         >
                             <Text style={styles.dashNumero}>{dashboard.Pendente}</Text>
                             <Text style={styles.dashRotulo}>Pendentes</Text>
                         </TouchableOpacity>
+                    )}
 
-                        {/* CARD AGENDADO */}
-                        <TouchableOpacity 
-                            style={[styles.dashCard, { borderColor: '#3182CE' }, statusFiltrado === 'Agendado' && styles.dashCardAtivo]} 
-                            onPress={() => alternarFiltroStatus('Agendado')}
-                        >
-                            <Text style={styles.dashNumero}>{dashboard.Agendado}</Text>
-                            <Text style={styles.dashRotulo}>Agendados</Text>
-                        </TouchableOpacity>
+                    {/* CARD AGENDADO */}
+                    <TouchableOpacity 
+                        style={[styles.dashCard, { borderColor: '#3182CE', width: usuario.admin ? '23%' : '31%' }, statusFiltrado === 'Agendado' && styles.dashCardAtivo]} 
+                        onPress={() => alternarFiltroStatus('Agendado')}
+                    >
+                        <Text style={styles.dashNumero}>{dashboard.Agendado}</Text>
+                        <Text style={styles.dashRotulo}>Agendados</Text>
+                    </TouchableOpacity>
 
-                        {/* CARD EM ANDAMENTO */}
-                        <TouchableOpacity 
-                            style={[styles.dashCard, { borderColor: '#DD6B20' }, statusFiltrado === 'Em Andamento' && styles.dashCardAtivo]} 
-                            onPress={() => alternarFiltroStatus('Em Andamento')}
-                        >
-                            <Text style={styles.dashNumero}>{dashboard.EmAndamento}</Text>
-                            <Text style={styles.dashRotulo}>Em Curso</Text>
-                        </TouchableOpacity>
+                    {/* CARD EM ANDAMENTO */}
+                    <TouchableOpacity 
+                        style={[styles.dashCard, { borderColor: '#DD6B20', width: usuario.admin ? '23%' : '31%' }, statusFiltrado === 'Em Andamento' && styles.dashCardAtivo]} 
+                        onPress={() => alternarFiltroStatus('Em Andamento')}
+                    >
+                        <Text style={styles.dashNumero}>{dashboard.EmAndamento}</Text>
+                        <Text style={styles.dashRotulo}>Em Curso</Text>
+                    </TouchableOpacity>
 
-                        {/* CARD CONCLUIDO */}
-                        <TouchableOpacity 
-                            style={[styles.dashCard, { borderColor: '#38A169' }, statusFiltrado === 'Concluido' && styles.dashCardAtivo]} 
-                            onPress={() => alternarFiltroStatus('Concluido')}
-                        >
-                            <Text style={styles.dashNumero}>{dashboard.Concluido}</Text>
-                            <Text style={styles.dashRotulo}>Concluídos</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {/* CARD CONCLUIDO */}
+                    <TouchableOpacity 
+                        style={[styles.dashCard, { borderColor: '#38A169', width: usuario.admin ? '23%' : '31%' }, statusFiltrado === 'Concluido' && styles.dashCardAtivo]} 
+                        onPress={() => alternarFiltroStatus('Concluido')}
+                    >
+                        <Text style={styles.dashNumero}>{dashboard.Concluido}</Text>
+                        <Text style={styles.dashRotulo}>Concluídos</Text>
+                    </TouchableOpacity>
                 </View>
-            )}
+            </View>
 
             <View style={styles.listaCabecalhoLinha}>
                 <Text style={styles.listaTitulo}>Ordens de Serviço</Text>
@@ -208,8 +244,10 @@ export default function ListagemMontagens({ route, navigation }) {
                             style={[styles.modalBotaoOpcao, { backgroundColor: '#005483', marginBottom: 20 }]} 
                             onPress={() => {
                                 setModalVisivel(false);
-                            navigation.navigate('ProgramarMontagem', { montagem: montagemSelecionada, token });}}>
-                                <Text style={styles.modalBotaoTexto}>Agendar Manutenção</Text>
+                                navigation.navigate('ProgramarMontagem', { montagem: montagemSelecionada, token });
+                            }}
+                        >
+                            <Text style={styles.modalBotaoTexto}>Agendar Manutenção</Text>
                             <View style={{ borderBottomWidth: 1, borderColor: '#E2E8F0', marginBottom: 15 }} />
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.modalBotaoOpcao, { backgroundColor: '#DD6B20' }]} onPress={() => handleAlterarStatus(3)}>
@@ -260,7 +298,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between'
     },
     dashCard: {
-        width: '23%',
         backgroundColor: '#FFFFFF',
         borderRadius: 8,
         paddingVertical: 10,
@@ -375,4 +412,5 @@ const styles = StyleSheet.create({
       		'italic'
       	},
       	// Botão Ver Mais discreto e limpo
-      	botaoVerMais: { width: '100%', height: 45, backgroundColor: '#EDF2F7', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 5, marginBottom: 20, borderWidth: 1, borderColor: '#CBD5E0' },botaoVerMaisTexto: { color: '#4A5568', fontSize: 14, fontWeight: 'bold' },modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40, elevation: 5 },modalTitulo: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 5, textAlign: 'center' },modalSubtitulo: { fontSize: 14, color: '#4A5568', marginBottom: 15, textAlign: 'center', fontWeight: '500' },modalBotaoOpcao: { width: '100%', height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 1 },modalBotaoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 },modalBotaoFechar: { width: '100%', height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F7FAFC' },modalBotaoFecharTexto: { color: '#4A5568', fontSize: 15, fontWeight: '600' }});
+      	botaoVerMais: { width: '100%', height: 45, backgroundColor: '#EDF2F7', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 5, marginBottom: 20, borderWidth: 1, borderColor: '#CBD5E0' },botaoVerMaisTexto: { color: '#4A5568', fontSize: 14, fontWeight: 'bold' },modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40, elevation: 5 },modalTitulo: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 5, textAlign: 'center' },modalSubtitulo: { fontSize: 14, color: '#4A5568', marginBottom: 15, textAlign: 'center', fontWeight: '500' },modalBotaoOpcao: { width: '100%', height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 1 },modalBotaoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 },modalBotaoFechar: { width: '100%', height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F7FAFC' },modalBotaoFecharTexto: { color: '#4A5568', fontSize: 15, fontWeight: '600' }
+});

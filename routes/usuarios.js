@@ -74,5 +74,16 @@ module.exports = (db) => {
         });
     });
 
+    // ROTA NOVA: Listar usuários para a tela de login (PÚBLICA)
+    // Traz TODOS os usuários ativos (Admin e Montadores), apenas os campos necessários
+    router.get('/lista-login', (req, res) => {
+        const query = 'SELECT Id, Nome FROM Usuario WHERE Ativo = 1 ORDER BY Nome ASC';
+        
+        db.query(query, (err, results) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(results);
+        });
+    });
+
     return router;
 };
