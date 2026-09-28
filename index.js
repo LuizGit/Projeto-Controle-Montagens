@@ -27,11 +27,13 @@ const statusRoutes = require('./routes/status');
 const usuarioRoutes = require('./routes/usuarios');
 const montagemRoutes = require('./routes/montagens');
 const authRoutes = require('./routes/auth');
+const path = require('path');
 
 app.use('/status', statusRoutes(db));
 app.use('/usuarios', usuarioRoutes(db));
 app.use('/montagens', montagemRoutes(db));
 app.use('/auth', authRoutes(db));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const PORT = 3000;
 app.listen(PORT, () => {

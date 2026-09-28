@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, Alert, TouchableOpacity, Modal } from 'react-native';
 import api from '../services/api';
+import * as FileSystem from 'expo-file-system/legacy'; // 🚀 Adicionado o '/legacy' no final!
+import * as Sharing from 'expo-sharing';
 
 export default function ListagemMontagens({ route, navigation }) {
     const { usuario, token } = route.params;
@@ -57,6 +59,30 @@ export default function ListagemMontagens({ route, navigation }) {
         } catch (error) {
             Alert.alert('Erro', 'Não foi possível atualizar o status.');
             setCarregando(false);
+        }
+    };
+    const handleAbrirProjetoPDF = async (caminhoPdf) => {
+        if (!caminhoPdf) {
+            Alert.alert('Aviso', 'Esta montagem não possui projeto em PDF anexado.');
+            return;
+        }
+
+        const urlBase = api.defaults.baseURL; 
+        const urlCompletaServer = `${urlBase}${caminhoPdf}`; 
+
+        try {
+            // 1. Define um caminho temporário e seguro no disco do celular do montador
+            const localUri = `${FileSystem.documentDirectory}projeto_nortfer.pdf`;
+            
+            // 2. Transfere o arquivo PDF do servidor Node para a memória do celular
+            const download = await FileSystem.downloadAsync(urlCompletaServer, localUri);
+            
+            // 3. Dispara a folha de compartilhamento/visualização nativa do celular (Android ou iOS)
+            // Isso permite ao montador abrir o PDF em tela cheia, dar zoom ou até enviar no WhatsApp.
+            await Sharing.shareAsync(download.uri);
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Erro', 'Não foi possível baixar ou visualizar o PDF do projeto.');
         }
     };
 
@@ -123,6 +149,26 @@ export default function ListagemMontagens({ route, navigation }) {
                     <Text style={[styles.cardTexto, { fontWeight: '600', color: '#005483' }]}>
                         📅 Início: {dataInicioFormatada}
                     </Text>
+                )}
+                
+                {item.Projeto_Url && (
+                    <TouchableOpacity 
+                        style={{
+                            backgroundColor: '#005483', // Azul metálico da marca Nortfer
+                            paddingVertical: 10,
+                            borderRadius: 6,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginTop: 12,
+                            marginBottom: 4,
+                            elevation: 1
+                        }}
+                        onPress={() => handleAbrirProjetoPDF(item.Projeto_Url)}
+                    >
+                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 'bold', letterSpacing: 0.5 }}>
+                            📋 VISUALIZAR PROJETO TÉCNICO (PDF)
+                        </Text>
+                    </TouchableOpacity>
                 )}
                 
                 <View style={styles.cardFooter}>

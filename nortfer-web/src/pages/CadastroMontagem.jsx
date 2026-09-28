@@ -11,6 +11,7 @@ export default function CadastroMontagem() {
     const [local, setLocal] = useState('');
     const [dataEntrada, setDataEntrada] = useState('');
     const [carregando, setCarregando] = useState(false);
+    const [arquivo, setArquivo] = useState(null);
 
     // Preenche o campo de data automaticamente com a data de hoje no formato do input (AAAA-MM-DD)
     useEffect(() => {
@@ -33,17 +34,25 @@ export default function CadastroMontagem() {
         setCarregando(true);
 
         try {
-            // Dispara o POST mantendo as restrições estritas da regra de negócio da NORTFER
-            await api.post('/montagens', {
-                Orcamento: parseInt(orcamento),
-                Cliente: cliente,
-                Status_Id: 1, // 🔒 TRAVADO EM 1 (PENDENTE) CONFORME REGRA DE PRIVACIDADE E DESIGN
-                Data_entrada: dataEntrada, // O input date já entrega no formato AAAA-MM-DD
-                Data_entrega: null,
-                Montador_1: null, 
-                Montador_2: null,
-                Local: local
-            });
+            // 🚀 MUDANÇA ESSENCIAL: Usando FormData para transporte de arquivos na Web
+            const formData = new FormData();
+            formData.append('Orcamento', orcamento);
+            formData.append('Cliente', cliente);
+            formData.append('Status_Id', 1);
+            formData.append('Data_entrada', dataEntrada);
+            formData.append('Local', local);
+            
+            // Se o usuário selecionou um arquivo no computador, anexa ele no formulário
+            if (arquivo) {
+                formData.append('Projeto', arquivo);
+            }
+
+            // Envia o formData. O Axios configurado adicionará o Content-Type correto sozinho.
+            await api.post('/montagens', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data' // Avisa a API que vai um arquivo junto
+                }
+        });
 
             alert('Ordem de montagem criada com sucesso!');
             navigate('/dashboard'); // Redireciona o administrador de volta ao painel geral
@@ -141,6 +150,15 @@ export default function CadastroMontagem() {
                                 onChange={(e) => setLocal(e.target.value)}
                                 style={styles.input}
                                 required
+                            />
+                        </div>
+                        <div style={styles.grupoInput}>
+                            <label style={styles.label}>Anexar Projeto Técnico (PDF)</label>
+                            <input 
+                                type="file" 
+                                accept=".pdf"
+                                onChange={(e) => setArquivo(e.target.files[0])} // Pega o primeiro arquivo selecionado
+                                style={styles.input}
                             />
                         </div>
 

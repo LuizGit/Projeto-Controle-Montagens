@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const fileInputRef = useRef(null);
     
     // Estados para guardar os dados carregados do Back-end
     const [dadosDashboard, setDadosDashboard] = useState({ Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
@@ -11,20 +12,25 @@ export default function Dashboard() {
     const [carregando, setCarregando] = useState(true);
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [pesquisa, setPesquisa] = useState('');
+    
+    // Guarda o ID da montagem que receberá o upload no clique do botão
+    const [idMontagemSelecionada, setIdMontagemSelecionada] = useState(null);
+    const [enviandoPdf, setEnviandoPdf] = useState(false);
 
     useEffect(() => {
-        const montagensFiltradas = montagens.filter(item => {
-            const termo = pesquisa.toLowerCase();
-            return (
-                item.Cliente?.toLowerCase().includes(termo) ||
-                item.Orcamento?.toString().includes(termo) ||
-                item.Local?.toLowerCase().includes(termo) ||
-                item.Status_Nome?.toLowerCase().includes(termo)
-            );
-        });
-        // Recupera o usuário logado para exibir o nome no painel
-        const userRaw = localStorage.getItem('@Nortfer:usuario');
-        if (userRaw) setUsuarioLogado(JSON.parse(userRaw));
+        // 🛡️ Trava de segurança para ler o usuário logado sem quebrar a tela
+        try {
+            const userRaw = localStorage.getItem('@Nortfer:usuario');
+            if (userRaw) {
+                const dadosProntos = JSON.parse(userRaw);
+                setUsuarioLogado({
+                    nome: dadosProntos.Nome || dadosProntos.nome || 'Administrador',
+                    admin: dadosProntos.Admin || dadosProntos.admin || 0
+                });
+            }
+        } catch (e) {
+            console.error("Erro ao ler usuário do localStorage", e);
+        }
 
         carregarInformacoes();
     }, []);
@@ -32,7 +38,6 @@ export default function Dashboard() {
     const carregarInformacoes = async () => {
         try {
             setCarregando(true);
-            // Faz a chamada unificada usando o Axios configurado
             const resposta = await api.get('/montagens');
             
             setDadosDashboard(resposta.data.dashboard || { Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
@@ -44,14 +49,62 @@ export default function Dashboard() {
             setCarregando(false);
         }
     };
+    
+    // Função disparada ao clicar no botão "Vincular PDF"
+    const acionarInputArquivo = (id) => {
+        setIdMontagemSelecionada(id);
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
+    // Envia o PDF selecionado para a API utilizando multipart/form-data
+    const handleUploadPdf = async (e) => {
+        const arquivo = e.target.files[0];
+        if (!arquivo || !idMontagemSelecionada) return;
+
+        // Validação simples para garantir que seja um arquivo PDF
+        if (arquivo.type !== 'application/pdf' && !arquivo.name.endsWith('.pdf')) {
+            alert('Por favor, selecione apenas arquivos no formato PDF.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('Projeto', arquivo);
+
+        try {
+            setEnviandoPdf(true);
+            // Certifique-se de que sua rota PUT ou uma rota específica no back-end aceite este FormData
+            await api.put(`/montagens/${idMontagemSelecionada}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            alert('Projeto executivo vinculado com sucesso!');
+            carregarInformacoes(); // Recarrega a tabela com o link atualizado
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao enviar o arquivo PDF para o servidor.');
+        } finally {
+            setEnviandoPdf(false);
+            setIdMontagemSelecionada(null);
+            e.target.value = null; // Reseta o campo de input
+        }
+    };
+
+    // Abre o PDF em uma nova aba do navegador usando a URL base da API
+    const handleVisualizarPdf = (urlRelativa) => {
+        const urlCompleta = `${api.defaults.baseURL || 'http://localhost:3000'}${urlRelativa}`;
+        window.open(urlCompleta, '_blank');
+    };
+
     const montagensFiltradas = montagens.filter(item => {
-    const termo = pesquisa.toLowerCase();
-    return (
-        item.Cliente?.toLowerCase().includes(termo) ||
-        item.Orcamento?.toString().includes(termo) ||
-        item.Local?.toLowerCase().includes(termo) ||
-        item.Status_Nome?.toLowerCase().includes(termo)
-    );
+        const termo = pesquisa.toLowerCase();
+        return (
+            item.Cliente?.toLowerCase().includes(termo) ||
+            item.Orcamento?.toString().includes(termo) ||
+            item.Local?.toLowerCase().includes(termo) ||
+            item.Status_Nome?.toLowerCase().includes(termo)
+        );
     });
 
     const handleLogout = () => {
@@ -59,18 +112,17 @@ export default function Dashboard() {
         navigate('/login');
     };
 
-    // Função auxiliar idêntica à do mobile para colorir as bolinhas/badges de status
     const obterCorStatus = (status) => {
         if (status === 'Pendente') return '#E53E3E';
         if (status === 'Agendado') return '#3182CE';
         if (status === 'Em Andamento') return '#DD6B20';
-        return '#38A169'; // Concluido
+        return '#38A169';
     };
 
     return (
         <div style={styles.layoutContainer}>
             <style>{`
-                    body, html, #root {
+                body, html, #root {
                     margin: 0 !important;
                     padding: 0 !important;
                     width: 100% !important;
@@ -78,6 +130,16 @@ export default function Dashboard() {
                     overflow: hidden;
                 }
             `}</style>
+            
+            {/* Input invisível para gerenciar o upload de PDF em segundo plano */}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleUploadPdf} 
+                accept=".pdf" 
+                style={{ display: 'none' }} 
+            />
+
             {/* 🚪 MENU LATERAL ESQUERDO (SIDEBAR) */}
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
@@ -117,8 +179,8 @@ export default function Dashboard() {
                         <h1 style={styles.tituloPagina}>Visão Geral</h1>
                         <p style={styles.subtituloPagina}>Estado atual das ordens de serviço corporativas</p>
                     </div>
-                    <button style={styles.botaoAtualizar} onClick={carregarInformacoes} disabled={carregando}>
-                        {carregando ? 'Carregando...' : '🔄 Atualizar'}
+                    <button style={styles.botaoAtualizar} onClick={carregarInformacoes} disabled={carregando || enviandoPdf}>
+                        {enviandoPdf ? 'Enviando PDF...' : carregando ? 'Carregando...' : '🔄 Atualizar'}
                     </button>
                 </header>
 
@@ -164,17 +226,17 @@ export default function Dashboard() {
                                     <th style={styles.th}>Local de Instalação</th>
                                     <th style={styles.th}>Responsável Principal</th>
                                     <th style={styles.th}>Status</th>
+                                    <th style={{ ...styles.th, textAlign: 'center' }}>Projeto Executivo</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {montagensFiltradas.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" style={styles.tabelaVazia}>
+                                        <td colSpan="6" style={styles.tabelaVazia}>
                                             Nenhuma ordem de serviço corresponde à pesquisa.
                                         </td>
                                     </tr>
                                 ) : (
-                                    /* ⚡ SE TIVER DADOS, FAZ O MAP NA LISTA FILTRADA EM VEZ DA ORIGINAL */
                                     montagensFiltradas.map((item) => (
                                         <tr key={item.Id} style={styles.tabelaRow}>
                                             <td style={{ ...styles.td, fontWeight: 'bold', color: '#005483' }}>
@@ -193,6 +255,23 @@ export default function Dashboard() {
                                                     {item.Status_Nome ? item.Status_Nome : 'PENDENTE'}
                                                 </span>
                                             </td>
+                                            <td style={{ ...styles.td, textAlign: 'center' }}>
+                                                {item.Projeto_Url ? (
+                                                    <button 
+                                                        onClick={() => handleVisualizarPdf(item.Projeto_Url)}
+                                                        style={styles.botaoVisualizarPdf}
+                                                    >
+                                                        📄 Abrir Projeto
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => acionarInputArquivo(item.Id)}
+                                                        style={styles.botaoUploadPdf}
+                                                    >
+                                                        ➕ Vincular PDF
+                                                    </button>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -205,177 +284,61 @@ export default function Dashboard() {
     );
 }
 
-// Estilos limpos, responsivos e focados em experiência Administrativa Desktop (CSS-in-JS)
 const styles = {
-    layoutContainer: {
-        display: 'flex',
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: '#F3F4F6',
-        fontFamily: 'sans-serif',
-        overflow: 'hidden',
-        margin: 0, padding: 0, boxSizing: 'border-box'
-    },
-    sidebar: {
-        width: '260px',
-        height: '100%',
-        backgroundColor: '#002D47', // Azul escuro corporativo profundo
-        color: '#FFFFFF',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '24px 16px',
-        boxSizing: 'border-box'
-    },
-    sidebarHeader: {
-        textAlign: 'center',
-        marginBottom: '30px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        paddingBottom: '16px'
-    },
-    sidebarLogo: {
-        fontSize: '24px',
-        fontWeight: 'bold',
-        letterSpacing: '1.5px',
-        color: '#FFFFFF',
-        margin: 0
-    },
-    sidebarSublogo: {
-        fontSize: '11px',
-        color: '#9CA3AF',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-    },
-    usuarioPerfilContainer: {
-        display: 'flex',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        padding: '12px',
-        borderRadius: '8px',
-        marginBottom: '25px'
-    },
-    usuarioAvatar: {
-        width: '36px',
-        height: '36px',
-        borderRadius: '50%',
-        backgroundColor: '#005483',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: 'bold',
-        fontSize: '16px',
-        marginRight: '10px'
-    },
-    usuarioInfo: {
-        display: 'flex',
-        flexDirection: 'column'
-    },
-    usuarioNome: {
-        fontSize: '14px',
-        fontWeight: 'bold',
-        margin: 0,
-        color: '#FFFFFF'
-    },
-    usuarioCargo: {
-        fontSize: '11px',
-        color: '#9CA3AF'
-    },
-    menuNav: {
-        display: 'flex',
-        flexDirection: 'column',gap: '8px',flex: 1},
-    menuBotao: {width: '100%',padding: '12px 16px',backgroundColor: 'transparent',color: '#D1D5DB',border: 'none',borderRadius: '6px',textAlign: 'left',fontSize: '14px',fontWeight: '600',cursor: 'pointer',transition: 'all 0.2s',display: 'flex',alignItems: 'center'},
-    menuBotaoAtivo: {
-        backgroundColor: '#005483', // Destaque azul da identidade da marca
-        color: '#FFFFFF'
-    },
-    botaoSair: {width: '100%',padding: '12px 16px',backgroundColor: 'transparent',color: '#EF4444', // Vermelho discreto para o logout
-        border: '1px solid rgba(239, 68, 68, 0.2)',
-        borderRadius: '6px',
-        textAlign: 'left',
-        fontSize: '14px',
+    layoutContainer: { display: 'flex', width: '100vw', height: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'sans-serif', overflow: 'hidden', margin: 0, padding: 0, boxSizing: 'border-box' },
+    sidebar: { width: '260px', height: '100%', backgroundColor: '#002D47', color: '#FFFFFF', display: 'flex', flexDirection: 'column', padding: '24px 16px', boxSizing: 'border-box' },
+    sidebarHeader: { textAlign: 'center', marginBottom: '30px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px' },
+    sidebarLogo: { fontSize: '24px', fontWeight: 'bold', letterSpacing: '1.5px', color: '#FFFFFF', margin: 0 },
+    sidebarSublogo: { fontSize: '11px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' },
+    usuarioPerfilContainer: { display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', marginBottom: '25px' },
+    usuarioAvatar: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#005483', display: 'flex', alignItems: 'center', justifycontent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px' },
+    usuarioInfo: { display: 'flex', flexDirection: 'column' },
+    usuarioNome: { fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#FFFFFF' },
+    usuarioCargo: { fontSize: '11px', color: '#9CA3AF' },
+    menuNav: { display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 },
+    menuBotao: { width: '100%', padding: '12px 16px', backgroundColor: 'transparent', color: '#D1D5DB', border: 'none', borderRadius: '6px', textAlign: 'left', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center' },
+    menuBotaoAtivo: { backgroundColor: '#005483', color: '#FFFFFF' },
+    botaoSair: { width: '100%', padding: '12px 16px', backgroundColor: 'transparent', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', textAlign: 'left', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', marginTop: 'auto' },
+    conteudoPrincipal: { flex: 1, height: '100%', padding: '32px', overflowY: 'auto', boxSizing: 'border-box' },
+    topoDashboard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' },
+    tituloPagina: { fontSize: '26px', fontWeight: 'bold', color: '#1F2937', margin: '0 0 4px 0' },
+    subtituloPagina: { fontSize: '14px', color: '#6B7280', margin: 0 },
+    botaoAtualizar: { padding: '10px 16px', backgroundColor: '#FFFFFF', color: '#374151', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' },
+    gridCards: { display: 'flex', justifyContent: 'space-between', gap: '20px', marginBottom: '32px' },
+    cardDash: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)', display: 'flex', flexDirection: 'column', justifycontent: 'center' },
+    cardRotulo: { fontSize: '13px', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px' },
+    cardNumero: { fontSize: '28px', fontWeight: 'bold', color: '#111827', margin: '8px 0 0 0' },
+    secaoTabela: { backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+    tituloTabela: { fontSize: '18px', fontWeight: 'bold', color: '#1F2937', margin: 0 },
+    tabelaWrapper: { overflowX: 'auto' },
+    tabela: { width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', textAlign: 'left', fontSize: '14px' },
+    tabelaHeaderRow: { backgroundColor: 'transparent' },
+    th: { padding: '0 16px 4px 16px', fontWeight: '600', color: '#4B5563', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' },
+    tabelaRow: { backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', transition: 'transform 0.2s' },
+    td: { padding: '16px', color: '#374151', verticalAlign: 'middle', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' },
+    tabelaVazia: { textAlign: 'center', padding: '30px', color: '#9CA3AF', fontStyle: 'italic' },
+    tabelaCabecalhoLinha: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' },
+    inputPesquisa: { width: '320px', height: '38px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB', borderRadius: '6px', padding: '0 12px', fontSize: '14px', color: '#1F2937', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' },
+    botaoVisualizarPdf: {
+        padding: '6px 12px',
+        backgroundColor: '#EBF8FF',
+        color: '#2B6CB0',
+        border: '1px solid #BEE3F8',
+        borderRadius: '4px',
+        fontSize: '13px',
         fontWeight: '600',
         cursor: 'pointer',
-        transition: 'all 0.2s',
-        marginTop: 'auto'
+        transition: 'all 0.2s'
     },
-    conteudoPrincipal: {flex: 1,height: '100%',padding: '32px',overflowY: 'auto',boxSizing: 'border-box'},
-    topoDashboard: {display: 'flex',justifyContent: 'space-between',alignItems: 'center',marginBottom: '28px'},
-    tituloPagina: {fontSize: '26px',fontWeight: 'bold',color: '#1F2937',margin: '0 0 4px 0'},
-    subtituloPagina: {fontSize: '14px',color: '#6B7280',margin: 0},
-    botaoAtualizar: {padding: '10px 16px',backgroundColor: '#FFFFFF',color: '#374151',border: '1px solid #D1D5DB',borderRadius: '6px',fontSize: '14px',fontWeight: '600',cursor: 'pointer',boxShadow:'0 1px 2px 0 rgba(0, 0, 0, 0.05)'},
-    gridCards: {display:'flex',justifyContent:'space-between',gap:'20px',marginBottom:'32px'},
-    cardDash: {flex:1,backgroundColor:'#FFFFFF',borderRadius:'8px',padding:'20px',boxShadow:'0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',display:'flex',flexDirection:'column',justifyContent:'center'},
-    cardRotulo: {fontSize:'13px',fontWeight:'600',color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.5px'},
-    cardNumero: {fontSize:'28px',fontWeight:'bold',color:'#111827',margin:'8px 0 0 0'},
-    secaoTabela: {backgroundColor:'#FFFFFF',borderRadius:'8px',padding:'24px',boxShadow:'0 1px',
-        borderCollapse: "+collapse",
-        textAlign:"+left",
-        fontSize:"+14 px"
-    },
-    tabela: {
-        width: '100%',
-        // 🚀 OBRIGATÓRIO: Permite que as linhas tenham espaçamento entre si
-        borderCollapse: 'separate', 
-        borderSpacing: '0 12px', // Cria um espaço de 12px entre uma linha e outra
-        textAlign: 'left',
-        fontSize: '14px'
-    },
-    tabelaHeaderRow: {
-        // Remove o fundo cinza colado do cabeçalho antigo
-        backgroundColor: 'transparent' 
-    },
-    th: {
-        padding: '0 16px 4px 16px', // Ajusta o alinhamento dos títulos do topo
-        fontWeight: '600',
-        color: '#4B5563',
+    botaoUploadPdf: {
+        padding: '6px 12px',
+        backgroundColor: '#F7FAFC',
+        color: '#4A5568',
+        border: '1px solid #CBD5E0',
+        borderRadius: '4px',
         fontSize: '13px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-    },
-    tabelaRow: {
-        backgroundColor: '#FFFFFF', // Dá o fundo branco para cada linha virar um "card"
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', // Sombra bem leve ao redor da linha
-        transition: 'transform 0.2s',
-    },
-    td: {
-        padding: '16px',
-        color: '#374151',
-        verticalAlign: 'middle',
-        // 🚀 Cria as bordas cinzas ao redor de cada linha separada
-        borderTop: '1px solid #E5E7EB',
-        borderBottom: '1px solid #E5E7EB',
-    },
-    badgeStatus: {
-        padding:"+4 px +8 px",
-        borderRadius:"+4 px",
-        color:"+#FFFFFF",
-        fontSize:"+11 px",
-        fontWeight:"+bold",
-        display:"+inline-block"
-    },
-    tabelaVazia: {
-        textAlign:"+center",
-        padding:"+30 px",
-        color:"+#9CA3AF",
-        fontStyle:"+italic"
-    },
-    tabelaCabecalhoLinha: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px',
-        width: '100%'
-    },
-    inputPesquisa: {
-        width: '320px', // Define um tamanho elegante para o campo desktop
-        height: '38px',
-        backgroundColor: '#F9FAFB',
-        border: '1px solid #D1D5DB',
-        borderRadius: '6px',
-        padding: '0 12px',
-        fontSize: '14px',
-        color: '#1F2937',
-        outline: 'none',
-        transition: 'border-color 0.2s',
-        boxSizing: 'border-box'
-    },
+        fontWeight: '600',
+        cursor: 'pointer',
+        transition: 'all 0.2s'
+    }
 };
