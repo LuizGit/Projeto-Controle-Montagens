@@ -9,7 +9,7 @@ export default function ListagemMontagens({ route, navigation }) {
 
     // Dados originais que vêm do servidor
     const [todasMontagens, setTodasMontagens] = useState([]);
-    const [dashboard, setDashboard] = useState({ Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
+    const [dashboard, setDashboard] = useState({ Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0, Atrasado: 0 });
     const [carregando, setCarregando] = useState(true);
 
     // Estados de Controle de Filtro e Paginação
@@ -88,7 +88,8 @@ export default function ListagemMontagens({ route, navigation }) {
 
     // ⚡ LÓGICA DE FILTRAGEM: Filtra a lista completa com base no Dashboard
     const montagensFiltradas = todasMontagens.filter(item => {
-        if (!statusFiltrado) return true; // Se nenhum filtro ativo, mostra todas
+        if (!statusFiltrado) return true; 
+        if (statusFiltrado === 'Atrasado') return item.Status_Prazo === 'Atrasado';
         return item.Status_Nome?.toLowerCase() === statusFiltrado.toLowerCase();
     });
 
@@ -121,6 +122,23 @@ export default function ListagemMontagens({ route, navigation }) {
         };
 
         const dataInicioFormatada = formatarData(item.Data_entrega);
+        
+        let textoPrazo = 'Sem prazo informado';
+        let corPrazo = '#718096';
+
+        if (item.Status_Prazo === 'Finalizado') {
+            textoPrazo = '✅ Concluído no Prazo';
+            corPrazo = '#38A169';
+        } else if (item.Status_Prazo === 'Atrasado') {
+            textoPrazo = `⚠️ ATRASADO HÁ ${item.Dias_Restantes} DIAS`;
+            corPrazo = '#E53E3E';
+        } else if (item.Status_Prazo === 'Vence Hoje') {
+            textoPrazo = '⏱️ VENCE HOJE!';
+            corPrazo = '#DD6B20';
+        } else if (item.Status_Prazo === 'No Prazo') {
+            textoPrazo = `Faltam ${item.Dias_Restantes} dias para a entrega`;
+            corPrazo = '#2B6CB0';
+        }
 
         return (
             <TouchableOpacity 
@@ -150,6 +168,10 @@ export default function ListagemMontagens({ route, navigation }) {
                         📅 Início: {dataInicioFormatada}
                     </Text>
                 )}
+
+                <Text style={[styles.cardTexto, { fontWeight: 'bold', color: corPrazo, marginTop: 4 }]}>
+                    ⏳ Prazo: {textoPrazo}
+                </Text>
                 
                 {item.Projeto_Url && (
                     <TouchableOpacity 
@@ -256,6 +278,13 @@ export default function ListagemMontagens({ route, navigation }) {
                     >
                         <Text style={styles.dashNumero}>{dashboard.Concluido}</Text>
                         <Text style={styles.dashRotulo}>Concluídos</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.dashCard, { borderColor: '#9B2C2C', backgroundColor: '#FFF5F5', width: '18%' }, statusFiltrado === 'Atrasado' && styles.dashCardAtivo]} 
+                        onPress={() => alternarFiltroStatus('Atrasado')}
+                    >
+                        <Text style={[styles.dashNumero, { color: '#9B2C2C' }]}>{dashboard.Atrasado || 0}</Text>
+                        <Text style={[styles.dashRotulo, { color: '#9B2C2C' }]}>Atraso</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -459,4 +488,5 @@ const styles = StyleSheet.create({
       	},
       	// Botão Ver Mais discreto e limpo
       	botaoVerMais: { width: '100%', height: 45, backgroundColor: '#EDF2F7', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 5, marginBottom: 20, borderWidth: 1, borderColor: '#CBD5E0' },botaoVerMaisTexto: { color: '#4A5568', fontSize: 14, fontWeight: 'bold' },modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40, elevation: 5 },modalTitulo: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 5, textAlign: 'center' },modalSubtitulo: { fontSize: 14, color: '#4A5568', marginBottom: 15, textAlign: 'center', fontWeight: '500' },modalBotaoOpcao: { width: '100%', height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 1 },modalBotaoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 },modalBotaoFechar: { width: '100%', height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F7FAFC' },modalBotaoFecharTexto: { color: '#4A5568', fontSize: 15, fontWeight: '600' }
+        
 });

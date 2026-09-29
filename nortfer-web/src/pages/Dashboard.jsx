@@ -6,19 +6,18 @@ export default function Dashboard() {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
     
-    // Estados para guardar os dados carregados do Back-end
+    // Estados do painel
     const [dadosDashboard, setDadosDashboard] = useState({ Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
     const [montagens, setMontagens] = useState([]);
+    const [totalAtrasados, setTotalAtrasados] = useState(0); // Novo contador de atrasados global
     const [carregando, setCarregando] = useState(true);
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [pesquisa, setPesquisa] = useState('');
     
-    // Guarda o ID da montagem que receberá o upload no clique do botão
     const [idMontagemSelecionada, setIdMontagemSelecionada] = useState(null);
     const [enviandoPdf, setEnviandoPdf] = useState(false);
 
     useEffect(() => {
-        // 🛡️ Trava de segurança para ler o usuário logado sem quebrar a tela
         try {
             const userRaw = localStorage.getItem('@Nortfer:usuario');
             if (userRaw) {
@@ -35,13 +34,66 @@ export default function Dashboard() {
         carregarInformacoes();
     }, []);
 
+    // 🚀 FUNÇÃO INTERNA: Calcula os dias restantes ou atraso baseado na data de hoje
+    const calcularPrazoStatus = (dataEntregaStr, statusNome) => {
+        if (!dataEntregaStr) return { texto: 'Sem prazo', cor: '#718096', ehAtrasado: false };
+        
+        // Se a montagem já foi concluída, não conta mais atraso!
+        if (statusNome?.toLowerCase() === 'concluido' || statusNome?.toLowerCase() === 'concluído') {
+            return { texto: 'Finalizado', cor: '#38A169', ehAtrasado: false };
+        }
+
+        // Zera as horas para comparar apenas os dias civis perfeitos
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const limite = new Date(dataEntregaStr);
+        // Corrige fuso horário da string vinda do banco se necessário
+        if (dataEntregaStr.includes('T')) {
+            limite.setHours(0,0,0,0);
+        } else {
+            // Se vier apenas AAAA-MM-DD
+            const partes = dataEntregaStr.split('-');
+            limite.setFullYear(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
+            limite.setHours(0,0,0,0);
+        }
+
+        const diferencaTempo = limite.getTime() - hoje.getTime();
+        const diferencaDias = Math.ceil(diferencaTempo / (1000 * 60 * 60 * 24));
+
+        if (diferencaDias < 0) {
+            const diasAtraso = Math.abs(diferencaDias);
+            return { 
+                texto: `⚠️ ATRASADO HÁ ${diasAtraso} DIAS`, 
+                cor: '#E53E3E', 
+                ehAtrasado: true 
+            };
+        } else if (diferencaDias === 0) {
+            return { texto: '⏱️ VENCE HOJE!', cor: '#DD6B20', ehAtrasado: false };
+        } else {
+            return { texto: `Faltam ${diferencaDias} dias`, col: '#2B6CB0', ehAtrasado: false };
+        }
+    };
+
     const carregarInformacoes = async () => {
         try {
             setCarregando(true);
             const resposta = await api.get('/montagens');
             
+            const listaMontagens = resposta.data.montagens || [];
             setDadosDashboard(resposta.data.dashboard || { Pendente: 0, Agendado: 0, EmAndamento: 0, Concluido: 0 });
-            setMontagens(resposta.data.montagens || []);
+            setMontagens(listaMontagens);
+
+            // 🚀 Varre a lista em tempo real e calcula quantos estão atrasados para atualizar o novo CARD
+            let contadorAtrasos = 0;
+            listaMontagens.forEach(item => {
+                const resultado = calcularPrazoStatus(item.Data_entrega, item.Status_Nome);
+                if (resultado.ehAtrasado) {
+                    contadorAtrasos++;
+                }
+            });
+            setTotalAtrasados(contadorAtrasos);
+
         } catch (error) {
             console.error(error);
             alert('Não foi possível carregar os dados das montagens.');
@@ -50,7 +102,6 @@ export default function Dashboard() {
         }
     };
     
-    // Função disparada ao clicar no botão "Vincular PDF"
     const acionarInputArquivo = (id) => {
         setIdMontagemSelecionada(id);
         if (fileInputRef.current) {
@@ -58,12 +109,10 @@ export default function Dashboard() {
         }
     };
 
-    // Envia o PDF selecionado para a API utilizando multipart/form-data
     const handleUploadPdf = async (e) => {
         const arquivo = e.target.files[0];
         if (!arquivo || !idMontagemSelecionada) return;
 
-        // Validação simples para garantir que seja um arquivo PDF
         if (arquivo.type !== 'application/pdf' && !arquivo.name.endsWith('.pdf')) {
             alert('Por favor, selecione apenas arquivos no formato PDF.');
             return;
@@ -74,24 +123,22 @@ export default function Dashboard() {
 
         try {
             setEnviandoPdf(true);
-            // Certifique-se de que sua rota PUT ou uma rota específica no back-end aceite este FormData
             await api.put(`/montagens/${idMontagemSelecionada}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             alert('Projeto executivo vinculado com sucesso!');
-            carregarInformacoes(); // Recarrega a tabela com o link atualizado
+            carregarInformacoes(); 
         } catch (error) {
             console.error(error);
             alert('Erro ao enviar o arquivo PDF para o servidor.');
         } finally {
             setEnviandoPdf(false);
             setIdMontagemSelecionada(null);
-            e.target.value = null; // Reseta o campo de input
+            e.target.value = null; 
         }
     };
 
-    // Abre o PDF em uma nova aba do navegador usando a URL base da API
     const handleVisualizarPdf = (urlRelativa) => {
         const urlCompleta = `${api.defaults.baseURL || 'http://localhost:3000'}${urlRelativa}`;
         window.open(urlCompleta, '_blank');
@@ -131,7 +178,6 @@ export default function Dashboard() {
                 }
             `}</style>
             
-            {/* Input invisível para gerenciar o upload de PDF em segundo plano */}
             <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -140,7 +186,6 @@ export default function Dashboard() {
                 style={{ display: 'none' }} 
             />
 
-            {/* 🚪 MENU LATERAL ESQUERDO (SIDEBAR) */}
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
                     <h2 style={styles.sidebarLogo}>NORTFER</h2>
@@ -172,7 +217,6 @@ export default function Dashboard() {
                 </button>
             </aside>
 
-            {/* 📊 CONTEÚDO PRINCIPAL (DIREITA) */}
             <main style={styles.conteudoPrincipal}>
                 <header style={styles.topoDashboard}>
                     <div>
@@ -180,11 +224,11 @@ export default function Dashboard() {
                         <p style={styles.subtituloPagina}>Estado atual das ordens de serviço corporativas</p>
                     </div>
                     <button style={styles.botaoAtualizar} onClick={carregarInformacoes} disabled={carregando || enviandoPdf}>
-                        {enviandoPdf ? 'Enviando PDF...' : carregando ? 'Carregando...' : '🔄 Atualizar'}
+                        {enviandoPdf ? 'Enviando...' : carregando ? 'Carregando...' : '🔄 Atualizar'}
                     </button>
                 </header>
 
-                {/* CARDS INDICADORES (GRID SUPERIOR) */}
+                {/* 🚀 GRID DE CARDS COM O NOVO INDICADOR DE ATRASO (5 CARDS AGORA) */}
                 <section style={styles.gridCards}>
                     <div style={{ ...styles.cardDash, borderLeft: '6px solid #E53E3E' }}>
                         <span style={styles.cardRotulo}>Pendentes</span>
@@ -202,15 +246,19 @@ export default function Dashboard() {
                         <span style={styles.cardRotulo}>Concluídos</span>
                         <h2 style={styles.cardNumero}>{dadosDashboard.Concluido}</h2>
                     </div>
+                    
+                    <div style={{ ...styles.cardDash, borderLeft: '6px solid #9B2C2C', backgroundColor: '#FFF5F5' }}>
+                        <span style={{ ...styles.cardRotulo, color: '#9B2C2C' }}>🚨 Em Atraso</span>
+                        <h2 style={{ ...styles.cardNumero, color: '#9B2C2C' }}>{totalAtrasados}</h2>
+                    </div>
                 </section>
 
-                {/* TABELA DE MONTAGENS (DESKTOP STYLE) */}
                 <section style={styles.secaoTabela}>
                     <div style={styles.tabelaCabecalhoLinha}>
                         <h3 style={styles.tituloTabela}>Ordens de Serviço Recentes</h3>
                         <input 
                             type="text"
-                            placeholder="🔍 Pesquisar por cliente, orçamento ou local..."
+                            placeholder="🔍 Pesquisar por cliente, orçamento..."
                             value={pesquisa}
                             onChange={(e) => setPesquisa(e.target.value)}
                             style={styles.inputPesquisa}
@@ -223,9 +271,10 @@ export default function Dashboard() {
                                 <tr style={styles.tabelaHeaderRow}>
                                     <th style={styles.th}>Orçamento</th>
                                     <th style={styles.th}>Cliente</th>
-                                    <th style={styles.th}>Local de Instalação</th>
-                                    <th style={styles.th}>Responsável Principal</th>
+                                    <th style={styles.th}>Local</th>
                                     <th style={styles.th}>Status</th>
+                                    {/* 🚀 NOVA COLUNA: Prazo dinâmico */}
+                                    <th style={styles.th}>Prazo / Vencimento</th>
                                     <th style={{ ...styles.th, textAlign: 'center' }}>Projeto Executivo</th>
                                 </tr>
                             </thead>
@@ -237,43 +286,51 @@ export default function Dashboard() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    montagensFiltradas.map((item) => (
-                                        <tr key={item.Id} style={styles.tabelaRow}>
-                                            <td style={{ ...styles.td, fontWeight: 'bold', color: '#005483' }}>
-                                                #{item.Orcamento}
-                                            </td>
-                                            <td style={styles.td}>{item.Cliente}</td>
-                                            <td style={styles.td}>📍 {item.Local || 'Não informado'}</td>
-                                            <td style={styles.td}>🛠️ {item.Nome_Montador_1 || 'Sem montador'}</td>
-                                            <td style={styles.td}>
-                                                <span style={{ 
-                                                    color: obterCorStatus(item.Status_Nome),
-                                                    fontWeight: 'bold',
-                                                    fontSize: '13px',
-                                                    textTransform: 'uppercase'
-                                                }}>
-                                                    {item.Status_Nome ? item.Status_Nome : 'PENDENTE'}
-                                                </span>
-                                            </td>
-                                            <td style={{ ...styles.td, textAlign: 'center' }}>
-                                                {item.Projeto_Url ? (
-                                                    <button 
-                                                        onClick={() => handleVisualizarPdf(item.Projeto_Url)}
-                                                        style={styles.botaoVisualizarPdf}
-                                                    >
-                                                        📄 Abrir Projeto
-                                                    </button>
-                                                ) : (
-                                                    <button 
-                                                        onClick={() => acionarInputArquivo(item.Id)}
-                                                        style={styles.botaoUploadPdf}
-                                                    >
-                                                        ➕ Vincular PDF
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
+                                    montagensFiltradas.map((item) => {
+                                        // Executa o cálculo para a linha atual
+                                        const prazoInfo = calcularPrazoStatus(item.Data_entrega, item.Status_Nome);
+
+                                        return (
+                                            <tr key={item.Id} style={styles.tabelaRow}>
+                                                <td style={{ ...styles.td, fontWeight: 'bold', color: '#005483' }}>
+                                                    #{item.Orcamento}
+                                                </td>
+                                                <td style={styles.td}>{item.Cliente}</td>
+                                                <td style={styles.td}>📍 {item.Local || 'Não informado'}</td>
+                                                <td style={styles.td}>
+                                                    <span style={{ 
+                                                        color: obterCorStatus(item.Status_Nome),
+                                                        fontWeight: 'bold',
+                                                        fontSize: '13px',
+                                                        textTransform: 'uppercase'
+                                                    }}>
+                                                        {item.Status_Nome ? item.Status_Nome : 'PENDENTE'}
+                                                    </span>
+                                                </td>
+                                                {/* 🚀 EXIBIÇÃO DO CONTADOR INDIVIDUAL */}
+                                                <td style={{ ...styles.td, fontWeight: '600', color: prazoInfo.cor }}>
+                                                    {prazoInfo.texto}
+                                                </td>
+                                                <td style={{ ...styles.td, textAlign: 'center' }}>
+                                                    {item.Projeto_Url ? (
+                                                        <button 
+                                                            onClick={() => handleVisualizarPdf(item.Projeto_Url)}
+                                                            style={styles.botaoVisualizarPdf}
+                                                        >
+                                                            📄 Abrir Projeto
+                                                        </button>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => acionarInputArquivo(item.Id)}
+                                                            style={styles.botaoUploadPdf}
+                                                        >
+                                                            ➕ Vincular PDF
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
@@ -291,7 +348,7 @@ const styles = {
     sidebarLogo: { fontSize: '24px', fontWeight: 'bold', letterSpacing: '1.5px', color: '#FFFFFF', margin: 0 },
     sidebarSublogo: { fontSize: '11px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' },
     usuarioPerfilContainer: { display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', marginBottom: '25px' },
-    usuarioAvatar: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#005483', display: 'flex', alignItems: 'center', justifycontent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px' },
+    usuarioAvatar: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#005483', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px' },
     usuarioInfo: { display: 'flex', flexDirection: 'column' },
     usuarioNome: { fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#FFFFFF' },
     usuarioCargo: { fontSize: '11px', color: '#9CA3AF' },
@@ -304,41 +361,21 @@ const styles = {
     tituloPagina: { fontSize: '26px', fontWeight: 'bold', color: '#1F2937', margin: '0 0 4px 0' },
     subtituloPagina: { fontSize: '14px', color: '#6B7280', margin: 0 },
     botaoAtualizar: { padding: '10px 16px', backgroundColor: '#FFFFFF', color: '#374151', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' },
-    gridCards: { display: 'flex', justifyContent: 'space-between', gap: '20px', marginBottom: '32px' },
-    cardDash: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)', display: 'flex', flexDirection: 'column', justifycontent: 'center' },
-    cardRotulo: { fontSize: '13px', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    cardNumero: { fontSize: '28px', fontWeight: 'bold', color: '#111827', margin: '8px 0 0 0' },
+    gridCards: { display: 'flex', justifyContent: 'space-between', gap: '14px', marginBottom: '32px' },
+    cardDash: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
+    cardRotulo: { fontSize: '12px', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px' },
+    cardNumero: { fontSize: '26px', fontWeight: 'bold', color: '#111827', margin: '6px 0 0 0' },
     secaoTabela: { backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
     tituloTabela: { fontSize: '18px', fontWeight: 'bold', color: '#1F2937', margin: 0 },
     tabelaWrapper: { overflowX: 'auto' },
     tabela: { width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', textAlign: 'left', fontSize: '14px' },
     tabelaHeaderRow: { backgroundColor: 'transparent' },
     th: { padding: '0 16px 4px 16px', fontWeight: '600', color: '#4B5563', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    tabelaRow: { backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', transition: 'transform 0.2s' },
+    tabelaRow: { backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' },
     td: { padding: '16px', color: '#374151', verticalAlign: 'middle', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' },
     tabelaVazia: { textAlign: 'center', padding: '30px', color: '#9CA3AF', fontStyle: 'italic' },
     tabelaCabecalhoLinha: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' },
-    inputPesquisa: { width: '320px', height: '38px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB', borderRadius: '6px', padding: '0 12px', fontSize: '14px', color: '#1F2937', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' },
-    botaoVisualizarPdf: {
-        padding: '6px 12px',
-        backgroundColor: '#EBF8FF',
-        color: '#2B6CB0',
-        border: '1px solid #BEE3F8',
-        borderRadius: '4px',
-        fontSize: '13px',
-        fontWeight: '600',
-        cursor: 'pointer',
-        transition: 'all 0.2s'
-    },
-    botaoUploadPdf: {
-        padding: '6px 12px',
-        backgroundColor: '#F7FAFC',
-        color: '#4A5568',
-        border: '1px solid #CBD5E0',
-        borderRadius: '4px',
-        fontSize: '13px',
-        fontWeight: '600',
-        cursor: 'pointer',
-        transition: 'all 0.2s'
-    }
+    inputPesquisa: { width: '320px', height: '38px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB', borderRadius: '6px', padding: '0 12px', fontSize: '14px', color: '#1F2937', outline: 'none', boxSizing: 'border-box' },
+    botaoVisualizarPdf: { padding: '6px 12px', backgroundColor: '#EBF8FF', color: '#2B6CB0', border: '1px solid #BEE3F8', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
+    botaoUploadPdf: { padding: '6px 12px', backgroundColor: '#F7FAFC', color: '#4A5568', border: '1px solid #CBD5E0', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }
 };
