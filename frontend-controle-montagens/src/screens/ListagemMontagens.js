@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Alert, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Alert, TouchableOpacity, Modal, TextInput } from 'react-native';
 import api from '../services/api';
 import * as FileSystem from 'expo-file-system/legacy'; // 🚀 Adicionado o '/legacy' no final!
 import * as Sharing from 'expo-sharing';
@@ -14,11 +14,27 @@ export default function ListagemMontagens({ route, navigation }) {
 
     // Estados de Controle de Filtro e Paginação
     const [statusFiltrado, setStatusFiltrado] = useState(null); // Armazena o status selecionado no Dash
+    const [pesquisa, setPesquisa] = useState(''); // Campo de pesquisa
     const [limiteExibicao, setLimiteExibicao] = useState(6); // Começa mostrando 6 itens
 
     // Estados para o Modal de Opções
     const [modalVisivel, setModalVisivel] = useState(false);
     const [montagemSelecionada, setMontagemSelecionada] = useState(null);
+
+    const handleBaixarRelatorioVencimentosMobile = async (dataInicioMobile, dataFimMobile) => {
+        try {
+            // Nome alterado para a persistência correta no armazenamento do smartphone
+            const localUri = `${FileSystem.documentDirectory}Relatorio_montagens_Perto_do_vencimento.pdf`;
+            const urlCompletaServer = `${api.defaults.baseURL}/montagens/relatorio/pdf?dataInicio=${dataInicioMobile}&dataFim=${dataFimMobile}`;
+            
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            
+            const download = await FileSystem.downloadAsync(urlCompletaServer, localUri, config);
+            await Sharing.shareAsync(download.uri);
+        } catch (error) {
+            Alert.alert('Erro', 'Não foi possível obter o PDF de vencimentos no celular.');
+        }
+    };
 
     useEffect(() => {
         carregarDados();
@@ -88,6 +104,17 @@ export default function ListagemMontagens({ route, navigation }) {
 
     // ⚡ LÓGICA DE FILTRAGEM: Filtra a lista completa com base no Dashboard
     const montagensFiltradas = todasMontagens.filter(item => {
+        // Validação da Barra de Pesquisa (Cliente, Orçamento ou Local)
+        const termo = pesquisa.toLowerCase();
+        const correspondePesquisa = (
+            item.Cliente?.toLowerCase().includes(termo) ||
+            item.Orcamento?.toString().includes(termo) ||
+            item.Local?.toLowerCase().includes(termo)
+        );
+
+        if (!correspondePesquisa) return false;
+
+        // Validação do Clique nos Cards do Dashboard
         if (!statusFiltrado) return true; 
         if (statusFiltrado === 'Atrasado') return item.Status_Prazo === 'Atrasado';
         return item.Status_Nome?.toLowerCase() === statusFiltrado.toLowerCase();
@@ -289,6 +316,17 @@ export default function ListagemMontagens({ route, navigation }) {
                 </View>
             </View>
 
+            <TextInput
+                style={styles.inputPesquisaMobile}
+                placeholder="🔍 Buscar por cliente, orçamento ou local..."
+                placeholderTextColor="#A0AEC0"
+                value={pesquisa}
+                onChangeText={(texto) => {
+                    setPesquisa(texto);
+                    setLimiteExibicao(6); // Reseta a paginação ao digitar
+                }}
+            />
+
             <View style={styles.listaCabecalhoLinha}>
                 <Text style={styles.listaTitulo}>Ordens de Serviço</Text>
                 {statusFiltrado && (
@@ -322,7 +360,7 @@ export default function ListagemMontagens({ route, navigation }) {
                                 navigation.navigate('ProgramarMontagem', { montagem: montagemSelecionada, token });
                             }}
                         >
-                            <Text style={styles.modalBotaoTexto}>Agendar Manutenção</Text>
+                            <Text style={styles.modalBotaoTexto}>Agendar Montagem</Text>
                             <View style={{ borderBottomWidth: 1, borderColor: '#E2E8F0', marginBottom: 15 }} />
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.modalBotaoOpcao, { backgroundColor: '#DD6B20' }]} onPress={() => handleAlterarStatus(3)}>
@@ -487,6 +525,19 @@ const styles = StyleSheet.create({
       		'italic'
       	},
       	// Botão Ver Mais discreto e limpo
-      	botaoVerMais: { width: '100%', height: 45, backgroundColor: '#EDF2F7', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 5, marginBottom: 20, borderWidth: 1, borderColor: '#CBD5E0' },botaoVerMaisTexto: { color: '#4A5568', fontSize: 14, fontWeight: 'bold' },modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40, elevation: 5 },modalTitulo: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 5, textAlign: 'center' },modalSubtitulo: { fontSize: 14, color: '#4A5568', marginBottom: 15, textAlign: 'center', fontWeight: '500' },modalBotaoOpcao: { width: '100%', height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 1 },modalBotaoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 },modalBotaoFechar: { width: '100%', height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F7FAFC' },modalBotaoFecharTexto: { color: '#4A5568', fontSize: 15, fontWeight: '600' }
+      	botaoVerMais: { width: '100%', height: 45, backgroundColor: '#EDF2F7', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 5, marginBottom: 20, borderWidth: 1, borderColor: '#CBD5E0' },botaoVerMaisTexto: { color: '#4A5568', fontSize: 14, fontWeight: 'bold' },modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40, elevation: 5 },modalTitulo: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 5, textAlign: 'center' },modalSubtitulo: { fontSize: 14, color: '#4A5568', marginBottom: 15, textAlign: 'center', fontWeight: '500' },modalBotaoOpcao: { width: '100%', height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 1 },modalBotaoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 },modalBotaoFechar: { width: '100%', height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F7FAFC' },modalBotaoFecharTexto: { color: '#4A5568', fontSize: 15, fontWeight: '600' },
+        inputPesquisaMobile: {
+        width: '100%',
+        height: 46,
+        backgroundColor: '#F7FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        fontSize: 14,
+        color: '#2D3748',
+        marginBottom: 10,
+        marginTop: 5
+    }
         
 });

@@ -9,27 +9,28 @@ import {
     Alert, 
     ActivityIndicator 
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker'; // Instalar via npx expo install @react-native-picker/picker
+import { Picker } from '@react-native-picker/picker'; 
 import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// 🔥 IMPORTAÇÃO ADICIONADA: Ajuste o caminho '../services/notificationService' se o seu arquivo estiver em outra pasta
+import { registrarParaNotificacoesPush } from '../services/notificationService';
 
 import logoNortfer from '../assets/logo.png';
 
 export default function Login({ navigation }) {
-    const [usuarios, setUsuarios] = useState([]); // Lista vinda do banco de dados
-    const [nome, setNome] = useState(''); // Armazena o nome selecionado
+    const [usuarios, setUsuarios] = useState([]); 
+    const [nome, setNome] = useState(''); 
     const [senha, setSenha] = useState('');
     const [carregando, setCarregando] = useState(false);
     const [carregandoUsuarios, setCarregandoUsuarios] = useState(true);
 
-    // Carrega os usuários assim que a tela abre
     useEffect(() => {
         buscarListaUsuarios();
     }, []);
 
     const buscarListaUsuarios = async () => {
         try {
-            // Chama a rota pública que criamos no backend
             const resposta = await api.get('/usuarios/lista-login');
             setUsuarios(resposta.data || []);
         } catch (error) {
@@ -58,6 +59,14 @@ export default function Login({ navigation }) {
             await AsyncStorage.setItem('@Nortfer:token', token);
             await AsyncStorage.setItem('@Nortfer:usuario', JSON.stringify(usuario));
 
+            // 🔥 CHAMADA ADICIONADA: Registra e envia o token de push para o backend
+            // Colocamos um try/catch isolado para que se falhar a notificação por falta de internet/emulador, o login continue funcionando normalmente
+            try {
+                await registrarParaNotificacoesPush(token);
+            } catch (pushError) {
+                console.log("Notificação Push não pôde ser ativada neste momento:", pushError.message);
+            }
+
             navigation.replace('Home', { usuario, token });
 
         } catch (error) {
@@ -73,7 +82,6 @@ export default function Login({ navigation }) {
             
             <Text style={styles.titulo}>Controle de Montagens</Text>
 
-            {/* Menu de Seleção de Usuários condicional */}
             {carregandoUsuarios ? (
                 <View style={[styles.input, { justifyContent: 'center' }]}>
                     <ActivityIndicator size="small" color="#005483" />
@@ -85,16 +93,23 @@ export default function Login({ navigation }) {
                         onValueChange={(itemValue) => setNome(itemValue)}
                         style={styles.picker}
                         dropdownIconColor="#005483"
+                        dropdownIconRippleColor="#E0E0E0"
+                        mode="dropdown" 
                     >
-                        <Picker.Item label="Selecione seu Usuário..." value="" color="#999" />
+                        <Picker.Item label="Selecione seu Usuário..." value="" color="#888888" style={{ backgroundColor: '#FFFFFF' }} />
                         {usuarios.map((user) => (
-                            <Picker.Item key={user.Id} label={user.Nome} value={user.Nome} color="#333" />
+                            <Picker.Item 
+                                key={user.Id} 
+                                label={user.Nome} 
+                                value={user.Nome} 
+                                color="#111111" 
+                                style={{ backgroundColor: '#FFFFFF' }} 
+                            />
                         ))}
                     </Picker>
                 </View>
             )}
 
-            {/* Campo Senha */}
             <TextInput 
                 style={styles.input}
                 placeholder="Senha"
@@ -105,7 +120,6 @@ export default function Login({ navigation }) {
                 autoCapitalize="none"
             />
 
-            {/* Botão Entrar */}
             <TouchableOpacity style={styles.botao} onPress={handleLogin} disabled={carregando || carregandoUsuarios}>
                 {carregando ? (
                     <ActivityIndicator color="#FFF" />
@@ -168,7 +182,8 @@ const styles = StyleSheet.create({
     },
     picker: {
         width: '100%',
-        color: '#333',
+        color: '#111111', 
+        backgroundColor: 'transparent',
     },
     botao: {
         width: '100%',

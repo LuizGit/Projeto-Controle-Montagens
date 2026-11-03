@@ -1,8 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CadastroMontagem from './pages/CadastroMontagem';
+import Relatorios from './pages/Relatorios';
 
 // 🎨 Objeto de estilos centralizado
 const styles = {
@@ -55,7 +56,7 @@ const RedirecionadorInicial = () => {
 
 export default function App() {
     return (
-        <BrowserRouter>
+        <HashRouter>
             <Routes>
                 {/* Rota Inicial: Decide o destino do usuário com base no Token */}
                 <Route path="/" element={<RedirecionadorInicial />} />
@@ -80,10 +81,18 @@ export default function App() {
                       </RotaPrivadaAdmin>
                   } 
                 />
+                <Route 
+                    path="/relatorios" 
+                    element={
+                        <RotaPrivadaAdmin>
+                        <Relatorios />
+                        </RotaPrivadaAdmin>
+                    } 
+                />
                 
                 {/* Rota de Fuga para links quebrados ou inexistentes */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-        </BrowserRouter>
+        </HashRouter>
     );
 }

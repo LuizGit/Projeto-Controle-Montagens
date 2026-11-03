@@ -1,8 +1,11 @@
 import axios from 'axios';
 
-// Configura a URL base do seu Back-end Node.js
+// Configura a URL base dinâmica diferenciando Desenvolvimento (Local) de Produção (HostGator)
 const api = axios.create({
-    baseURL: 'http://localhost:3000', // Altere a porta se o seu Node usar outra
+    // 🚀 ALTERADO: Se estiver em produção, adiciona o prefixo /api para bater na pasta correta do Node.js
+    baseURL: import.meta.env.PROD 
+        ? 'https://api.nortferelevadores.com' 
+        : 'http://localhost:3000', 
     timeout: 10000, 
     headers: {
         'Content-Type': 'application/json',

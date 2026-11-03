@@ -13,9 +13,13 @@ export default function Dashboard() {
     const [carregando, setCarregando] = useState(true);
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [pesquisa, setPesquisa] = useState('');
+
+    const [dataInicioFiltro, setDataInicioFiltro] = useState('');
+    const [dataFimFiltro, setDataFimFiltro] = useState('');
     
     const [idMontagemSelecionada, setIdMontagemSelecionada] = useState(null);
     const [enviandoPdf, setEnviandoPdf] = useState(false);
+
 
     useEffect(() => {
         try {
@@ -139,6 +143,33 @@ export default function Dashboard() {
         }
     };
 
+    const handleBaixarRelatorioVencimentos = async () => {
+        if (!dataInicioFiltro || !dataFimFiltro) {
+            alert('Por favor, selecione a Data Inicial e a Data Final para gerar o relatório de vencimentos.');
+            return;
+        }
+
+        try {
+            const resposta = await api.get('/montagens/relatorio/pdf', { 
+                responseType: 'blob',
+                params: { 
+                    dataInicio: dataInicioFiltro, 
+                    dataFim: dataFimFiltro 
+                }
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([resposta.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'Relatorio_montagens_Perto_do_vencimento.pdf');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            alert('Não foi possível gerar o relatório de vencimentos no momento.');
+        }
+    };
+
     const handleVisualizarPdf = (urlRelativa) => {
         const urlCompleta = `${api.defaults.baseURL || 'http://localhost:3000'}${urlRelativa}`;
         window.open(urlCompleta, '_blank');
@@ -207,6 +238,10 @@ export default function Dashboard() {
                     <button style={styles.menuBotao} onClick={() => navigate('/cadastrar-montagem')}>
                         🏗️ Cadastrar Montagem
                     </button>
+                    {/* ADICIONADO: Botão de navegação para a central de relatórios */}
+                    <button style={styles.menuBotao} onClick={() => navigate('/relatorios')}>
+                        📋 Central de Relatórios
+                    </button>
                     <button style={styles.menuBotao} onClick={() => alert('Navegar para Alterar Senhas')}>
                         🔒 Alterar Senhas
                     </button>
@@ -228,6 +263,42 @@ export default function Dashboard() {
                     </button>
                 </header>
 
+                <div style={styles.containerFiltroRelatorio}>
+                    <div style={styles.blocoTextoFiltro}>
+                        <span style={styles.tituloFiltroRelatorio}>📋 Relatório de Montagens - Perto do Vencimento</span>
+                        <p style={styles.subtituloFiltroRelatorio}>Selecione o intervalo de datas para buscar os prazos limite no banco de dados</p>
+                    </div>
+                    
+                    <div style={styles.grupoInputsFiltro}>
+                        <div style={styles.campoDataFiltro}>
+                            <label style={styles.labelFiltro}>Data Inicial:</label>
+                            <input 
+                                type="date" 
+                                value={dataInicioFiltro} 
+                                onChange={(e) => setDataInicioFiltro(e.target.value)} 
+                                style={styles.inputDataFiltro} 
+                            />
+                        </div>
+                        
+                        <div style={styles.campoDataFiltro}>
+                            <label style={styles.labelFiltro}>Data Final:</label>
+                            <input 
+                                type="date" 
+                                value={dataFimFiltro} 
+                                onChange={(e) => setDataFimFiltro(e.target.value)} 
+                                style={styles.inputDataFiltro} 
+                            />
+                        </div>
+
+                        <button 
+                            onClick={handleBaixarRelatorioVencimentos} 
+                            style={styles.botaoGerarPdf}
+                        >
+                            📄 Baixar PDF
+                        </button>
+                    </div>
+                </div>
+
                 {/* 🚀 GRID DE CARDS COM O NOVO INDICADOR DE ATRASO (5 CARDS AGORA) */}
                 <section style={styles.gridCards}>
                     <div style={{ ...styles.cardDash, borderLeft: '6px solid #E53E3E' }}>
@@ -247,7 +318,10 @@ export default function Dashboard() {
                         <h2 style={styles.cardNumero}>{dadosDashboard.Concluido}</h2>
                     </div>
                     
-                    <div style={{ ...styles.cardDash, borderLeft: '6px solid #9B2C2C', backgroundColor: '#FFF5F5' }}>
+                    <div 
+                        onClick={() => navigate('/relatorios')}
+                        style={{ ...styles.cardDash, borderLeft: '6px solid #9B2C2C', backgroundColor: '#FFF5F5', cursor: 'pointer' }}
+                    >
                         <span style={{ ...styles.cardRotulo, color: '#9B2C2C' }}>🚨 Em Atraso</span>
                         <h2 style={{ ...styles.cardNumero, color: '#9B2C2C' }}>{totalAtrasados}</h2>
                     </div>
@@ -377,5 +451,74 @@ const styles = {
     tabelaCabecalhoLinha: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' },
     inputPesquisa: { width: '320px', height: '38px', backgroundColor: '#F9FAFB', border: '1px solid #D1D5DB', borderRadius: '6px', padding: '0 12px', fontSize: '14px', color: '#1F2937', outline: 'none', boxSizing: 'border-box' },
     botaoVisualizarPdf: { padding: '6px 12px', backgroundColor: '#EBF8FF', color: '#2B6CB0', border: '1px solid #BEE3F8', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
-    botaoUploadPdf: { padding: '6px 12px', backgroundColor: '#F7FAFC', color: '#4A5568', border: '1px solid #CBD5E0', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }
+    botaoUploadPdf: { padding: '6px 12px', backgroundColor: '#F7FAFC', color: '#4A5568', border: '1px solid #CBD5E0', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
+    containerFiltroRelatorio: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderLeft: '6px solid #005483',
+        flexWrap: 'wrap',
+        gap: '16px'
+    },
+    blocoTextoFiltro: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px'
+    },
+    tituloFiltroRelatorio: {
+        fontSize: '15px',
+        fontWeight: 'bold',
+        color: '#1F2937'
+    },
+    subtituloFiltroRelatorio: {
+        fontSize: '13px',
+        color: '#6B7280',
+        margin: 0
+    },
+    grupoInputsFiltro: {
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: '16px'
+    },
+    campoDataFiltro: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+    },
+    labelFiltro: {
+        fontSize: '12px',
+        fontWeight: '600',
+        color: '#4B5563'
+    },
+    inputDataFiltro: {
+        height: '38px',
+        backgroundColor: '#F9FAFB',
+        border: '1px solid #D1D5DB',
+        borderRadius: '6px',
+        padding: '0 10px',
+        fontSize: '14px',
+        color: '#1F2937',
+        outline: 'none',
+        fontFamily: 'sans-serif'
+    },
+    botaoGerarPdf: {
+        height: '38px',
+        padding: '0 18px',
+        backgroundColor: '#E53E3E', // Cor vermelha para dar o tom de prazo/vencimento
+        color: '#FFFFFF',
+        border: 'none',
+        borderRadius: '6px',
+        fontSize: '13px',
+        fontWeight: 'bold',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+    }
 };

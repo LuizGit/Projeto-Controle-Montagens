@@ -10,7 +10,7 @@ export default function CadastroMontagem() {
     const [cliente, setCliente] = useState('');
     const [local, setLocal] = useState('');
     const [dataEntrada, setDataEntrada] = useState('');
-    const [prazoDias, setPrazoDias] = useState('7'); // Novo estado: Padrão de 7 dias de prazo
+    const [prazoDias, setPrazoDias] = useState('90'); // Novo estado: Padrão de 90 dias de prazo
     const [carregando, setCarregando] = useState(false);
     const [arquivo, setArquivo] = useState(null);
 

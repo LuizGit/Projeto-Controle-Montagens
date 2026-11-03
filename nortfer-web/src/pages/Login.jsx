@@ -19,9 +19,17 @@ export default function Login() {
     const buscarListaUsuarios = async () => {
         try {
             const resposta = await api.get('/usuarios/lista-login');
-            setUsuarios(resposta.data || []);
+            
+            // 🛡️ SEGURANÇA: Garante que só vai salvar se a resposta for estritamente um Array
+            if (Array.isArray(resposta.data)) {
+                setUsuarios(resposta.data);
+            } else {
+                console.error('A API não retornou um Array de usuários:', resposta.data);
+                setUsuarios([]); // Evita o erro do .map()
+            }
         } catch (error) {
             console.error(error);
+            setUsuarios([]); // Evita o erro do .map() se a API falhar ou der erro 500
             alert('Não foi possível carregar a lista de usuários da NORTFER.');
         } finally {
             setCarregandoUsuarios(false);

@@ -72,14 +72,14 @@ module.exports = (db) => {
 
         const queryLista = `
                 SELECT m.Id, m.Orcamento, m.Cliente, m.Local, m.Data_entrada, m.Data_entrega, m.Status_Id, m.Projeto_Url,
-                    s.Descricao AS Status_Nome, u1.Nome AS Nome_Montador_1, u2.Nome AS Nome_Montador_2
+                    m.prev_montagem, s.Descricao AS Status_Nome, u1.Nome AS Nome_Montador_1, u2.Nome AS Nome_Montador_2
                 FROM Montagem m
                 LEFT JOIN Status s ON m.Status_Id = s.Id
                 LEFT JOIN Usuario u1 ON m.Montador_1 = u1.Id
                 LEFT JOIN Usuario u2 ON m.Montador_2 = u2.Id
                 ${filtroLista}
                 ORDER BY m.Id DESC
-            `;
+        `;
 
         const queryDash = `
             SELECT 
@@ -153,38 +153,35 @@ module.exports = (db) => {
     });
     
     // Atualizar Status ou Dados de uma Montagem
-    router.put('/:id', verificarToken, apenasAdmin, upload.single('Projeto'), (req, res) => {
+    router.put('/:id', verificarToken, (req, res) => {
         const { id } = req.params;
-        const { Orcamento, Cliente, Status_Id, Data_entrega, Montador_1, Montador_2, Local } = req.body;
+        const { Orcamento, Cliente, Status_Id, Data_entrega, Montador_1, Montador_2, Local, prev_montagem } = req.body;
         
-        // Verifica se um arquivo PDF foi enviado no upload
+        // O multer manipula o req.file caso a requisição venha como multipart/form-data
         const novoProjetoUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        // 🌟 CASO 1: O Frontend enviou APENAS o arquivo PDF (Upload direto pelo Dashboard)
+        // 🌟 CASO 1: Upload de arquivo isolado via Dashboard Web
         if (novoProjetoUrl && !Orcamento && !Cliente) {
             const queryApenasPdf = `UPDATE Montagem SET Projeto_Url = ? WHERE Id = ?`;
-            
             db.query(queryApenasPdf, [novoProjetoUrl, id], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 return res.json({ message: 'Projeto PDF vinculado com sucesso!' });
             });
         } 
-        // 🌟 CASO 2: O Frontend enviou o formulário completo de edição + um novo arquivo PDF
+        // 🌟 CASO 2: Atualização completa vinda da Web (Com arquivo)
         else if (novoProjetoUrl) {
-            const queryComCompleta = `UPDATE Montagem SET Orcamento = ?, Cliente = ?, Status_Id = ?, Data_entrega = ?, 
-                                      Montador_1 = ?, Montador_2 = ?, Local = ?, Projeto_Url = ? WHERE Id = ?`;
-            
-            db.query(queryComCompleta, [Orcamento, Cliente, Status_Id, Data_entrega, Montador_1, Montador_2, Local, novoProjetoUrl, id], (err) => {
+            const queryCompleta = `UPDATE Montagem SET Orcamento = ?, Cliente = ?, Status_Id = ?, Data_entrega = ?, 
+                                   Montador_1 = ?, Montador_2 = ?, Local = ?, Projeto_Url = ?, prev_montagem = ? WHERE Id = ?`;
+            db.query(queryCompleta, [Orcamento, Cliente, Status_Id, Data_entrega, Montador_1, Montador_2, Local, novoProjetoUrl, prev_montagem || null, id], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 return res.json({ message: 'Montagem e PDF atualizados com sucesso' });
             });
         } 
-        // 🌟 CASO 3: O Frontend enviou apenas o formulário de edição de texto (Sem alterar o PDF)
+        // 🌟 CASO 3: Atualização padrão de texto (Muito usada pelo App Mobile)
         else {
             const queryPadrao = `UPDATE Montagem SET Orcamento = ?, Cliente = ?, Status_Id = ?, Data_entrega = ?, 
-                                 Montador_1 = ?, Montador_2 = ?, Local = ? WHERE Id = ?`;
-            
-            db.query(queryPadrao, [Orcamento, Cliente, Status_Id, Data_entrega, Montador_1, Montador_2, Local, id], (err) => {
+                                 Montador_1 = ?, Montador_2 = ?, Local = ?, prev_montagem = ? WHERE Id = ?`;
+            db.query(queryPadrao, [Orcamento, Cliente, Status_Id, Data_entrega, Montador_1, Montador_2, Local, prev_montagem || null, id], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 return res.json({ message: 'Montagem atualizada com sucesso' });
             });
@@ -218,6 +215,110 @@ module.exports = (db) => {
         db.query('DELETE FROM Montagem WHERE Id = ?', [id], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ message: 'Montagem removida com sucesso' });
+        });
+    });
+
+    router.get('/relatorio/pdf', verificarToken, (req, res) => {
+        const PDFDocument = require('pdfkit');
+        const { dataInicio, dataFim } = req.query;
+
+        if (!dataInicio || !dataFim) {
+            return res.status(400).json({ error: "Por favor, informe a data de início e fim do período." });
+        }
+
+        // Busca montagens onde a Data_entrega OU a prev_montagem estejam no período, ignorando as concluídas
+        const queryRelatorio = `
+            SELECT m.Id, m.Orcamento, m.Cliente, m.Local, m.Data_entrada, m.Data_entrega, m.prev_montagem,
+                   s.Descricao AS Status_Nome, u1.Nome AS Nome_Montador_1
+            FROM Montagem m
+            LEFT JOIN Status s ON m.Status_Id = s.Id
+            LEFT JOIN Usuario u1 ON m.Montador_1 = u1.Id
+            WHERE (m.Data_entrega BETWEEN ? AND ? OR m.prev_montagem BETWEEN ? AND ?)
+              AND m.Status_Id <> 4
+            ORDER BY COALESCE(m.prev_montagem, m.Data_entrega) ASC
+        `;
+
+        db.query(queryRelatorio, [dataInicio, dataFim, dataInicio, dataFim], (err, resultados) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const doc = new PDFDocument({ size: 'A4', margin: 40 });
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename=Relatorio_montagens_Perto_do_vencimento.pdf');
+            doc.pipe(res);
+
+            // 🎨 DESIGN E IDENTIDADE DO RELATÓRIO
+            doc.rect(0, 0, 600, 20).fill('#E53E3E'); 
+            doc.moveDown(2);
+            doc.fontSize(18).fillColor('#9B2C2C').text('RELATÓRIO DE MONTAGENS - PERTO DO VENCIMENTO', { bold: true });
+            
+            const perInicio = dataInicio.split('-').reverse().join('/');
+            const perFim = dataFim.split('-').reverse().join('/');
+            doc.fontSize(10).fillColor('#4B5563').text(`Período de Vencimento/Previsão Analisado: ${perInicio} até ${perFim}`);
+            doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`);
+            doc.moveDown(1);
+            
+            doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#D1D5DB').stroke();
+            doc.moveDown(2);
+
+            // 📊 TABELA DE DADOS
+            doc.fontSize(12).fillColor('#1F2937').text('Ordens de Serviço Cronológicas no Período:', { bold: true });
+            doc.moveDown(1);
+
+            const yHeader = doc.y;
+            doc.fontSize(10).fillColor('#1F2937');
+            doc.text('Prazo / Venc.', 40, yHeader, { bold: true });
+            doc.text('Orçamento', 135, yHeader, { bold: true });
+            doc.text('Cliente', 200, yHeader, { bold: true });
+            doc.text('Local', 320, yHeader, { bold: true });
+            doc.text('Status', 480, yHeader, { bold: true });
+            
+            doc.moveTo(40, doc.y + 5).lineTo(555, doc.y + 5).strokeColor('#E5E7EB').stroke();
+            doc.moveDown(0.8);
+
+            if (resultados.length === 0) {
+                doc.moveDown(2);
+                doc.fontSize(11).fillColor('#718096').text('Nenhuma ordem de serviço pendente ou em andamento possui vencimento ou previsão neste período.', { align: 'center', italic: true });
+            } else {
+                resultados.forEach(item => {
+                    if (doc.y > 750) {
+                        doc.addPage();
+                        const yNewHeader = doc.y;
+                        doc.fontSize(10).fillColor('#1F2937');
+                        doc.text('Prazo / Venc.', 40, yNewHeader, { bold: true });
+                        doc.text('Orçamento', 135, yNewHeader, { bold: true });
+                        doc.text('Cliente', 200, yNewHeader, { bold: true });
+                        doc.text('Local', 320, yNewHeader, { bold: true });
+                        doc.text('Status', 480, yNewHeader, { bold: true });
+                        doc.moveTo(40, doc.y + 5).lineTo(555, doc.y + 5).strokeColor('#E5E7EB').stroke();
+                        doc.moveDown(0.8);
+                    }
+
+                    const yRow = doc.y;
+                    doc.fontSize(9).fillColor('#374151');
+                    
+                    // ⚙️ LÓGICA EXIGIDA: Se houver previsão de montagem, prioriza ela e adiciona a tag (Prev.)
+                    let dataExibicao = 'N/A';
+                    let usaPrevisao = false;
+
+                    if (item.prev_montagem) {
+                        dataExibicao = `(Prev.) ${new Date(item.prev_montagem).toLocaleDateString('pt-BR')}`;
+                        usaPrevisao = true;
+                    } else if (item.Data_entrega) {
+                        dataExibicao = new Date(item.Data_entrega).toLocaleDateString('pt-BR');
+                    }
+                    
+                    // Renderiza a linha com cores distintas para previsões (Azul) e prazos normais (Preto/Cinza)
+                    doc.fillColor(usaPrevisao ? '#2B6CB0' : '#1F2937').text(dataExibicao, 40, yRow, { bold: usaPrevisao });
+                    doc.fillColor('#374151').text(`#${item.Orcamento || 'N/A'}`, 135, yRow);
+                    doc.text(item.Cliente ? item.Cliente.substring(0, 18) : 'N/A', 200, yRow);
+                    doc.text(item.Local ? item.Local.substring(0, 25) : 'N/A', 320, yRow);
+                    doc.text(item.Status_Nome ? item.Status_Nome.toUpperCase() : 'PENDENTE', 480, yRow, { color: '#E53E3E' });
+                    doc.moveDown(0.8);
+                });
+            }
+
+            doc.end();
         });
     });
 

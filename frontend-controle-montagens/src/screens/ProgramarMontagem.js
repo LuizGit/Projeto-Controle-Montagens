@@ -15,7 +15,7 @@ export default function ProgramarMontagem({ route, navigation }) {
     const { montagem, token } = route.params;
 
     const [usuarios, setUsuarios] = useState([]);
-    const [dataAgendada, setDataAgendada] = useState('');
+    const [dataPrevisao, setDataPrevisao] = useState('');
     const [montador1, setMontador1] = useState('');
     const [montador2, setMontador2] = useState('');
     const [carregando, setCarregando] = useState(false);
@@ -24,17 +24,17 @@ export default function ProgramarMontagem({ route, navigation }) {
     useEffect(() => {
         carregarMontadores();
         
-        // Se a montagem já tiver uma data de entrega/agendamento salva, preenche na tela
-        if (montagem.Data_entrega) {
-            const [ano, mes, dia] = montagem.Data_entrega.split('T')[0].split('-');
-            setDataAgendada(`${dia}/${mes}/${ano}`);
+        // 🟢 Se já houver previsão salva, carrega na tela
+        if (montagem.prev_montagem) {
+            const [anoP, mesP, diaP] = montagem.prev_montagem.split('T')[0].split('-');
+            setDataPrevisao(`${diaP}/${mesP}/${anoP}`);
         } else {
-            // Caso contrário, sugere a data de hoje para facilitar
+            // Caso contrário, sugere a data de hoje por padrão
             const hoje = new Date();
             const dia = String(hoje.getDate()).padStart(2, '0');
             const mes = String(hoje.getMonth() + 1).padStart(2, '0');
             const ano = hoje.getFullYear();
-            setDataAgendada(`${dia}/${mes}/${ano}`);
+            setDataPrevisao(`${dia}/${mes}/${ano}`);
         }
         
         if (montagem.Montador_1) setMontador1(String(montagem.Montador_1));
@@ -66,8 +66,9 @@ export default function ProgramarMontagem({ route, navigation }) {
     };
 
     const handleSalvarProgramacao = async () => {
-        if (!dataAgendada || dataAgendada.length !== 10) {
-            Alert.alert('Atenção', 'Por favor, insira uma data de agendamento válida (DD/MM/AAAA).');
+        // Valida se o campo obrigatório de previsão foi preenchido corretamente
+        if (!dataPrevisao || dataPrevisao.length !== 10) {
+            Alert.alert('Atenção', 'Por favor, insira uma Previsão de Conclusão válida (DD/MM/AAAA).');
             return;
         }
 
@@ -78,25 +79,28 @@ export default function ProgramarMontagem({ route, navigation }) {
 
         setCarregando(true);
 
-        // Converte DD/MM/AAAA para o padrão MySQL (AAAA-MM-DD)
-        const [dia, mes, ano] = dataAgendada.split('/');
-        const dataFormatadaBanco = `${ano}-${mes}-${dia}`;
+        // Converte DD/MM/AAAA da previsão para o padrão MySQL (AAAA-MM-DD)
+        const [diaP, mesP, anoP] = dataPrevisao.split('/');
+        const previsaoFormatadaBanco = `${anoP}-${mesP}-${diaP}`;
+
+        // 🟢 Mantém a Data_entrega exatamente como veio do banco de dados (preserva o prazo)
+        const dataEntregaOriginal = montagem.Data_entrega ? montagem.Data_entrega.split('T')[0] : null;
 
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
-            // Enviamos uma atualização PUT para atualizar os campos de agendamento no banco
             await api.put(`/montagens/${montagem.Id}`, {
                 Orcamento: montagem.Orcamento,
                 Cliente: montagem.Cliente,
                 Local: montagem.Local,
-                Status_Id: 2, // ⚙️ Atualiza automaticamente para o status 2 (Agendado) ao programar!
-                Data_entrega: dataFormatadaBanco, 
+                Status_Id: 2, // Muda o status para Agendado
+                Data_entrega: dataEntregaOriginal, // 🟢 Preserva o valor original intacto
                 Montador_1: parseInt(montador1),
-                Montador_2: montador2 ? parseInt(montador2) : null
+                Montador_2: montador2 ? parseInt(montador2) : null,
+                prev_montagem: previsaoFormatadaBanco // Grava a previsão de montagem informada
             }, config);
 
-            Alert.alert('Sucesso', 'Montagem programada e agendada com sucesso!', [
+            Alert.alert('Sucesso', 'Montagem programada com sucesso!', [
                 { text: 'OK', onPress: () => navigation.navigate('ListagemMontagens', { usuario: { admin: true }, token }) }
             ]);
 
@@ -125,15 +129,24 @@ export default function ProgramarMontagem({ route, navigation }) {
                 <Text style={styles.infoSub}>Local: {montagem.Local}</Text>
             </View>
 
-            <Text style={styles.label}>Data Agendada para o Início *</Text>
+            <Text style={styles.label}>Previsão de Conclusão da Montagem (Opcional)</Text>
             <TextInput 
                 style={styles.input}
                 placeholder="DD/MM/AAAA"
                 placeholderTextColor="#999"
                 keyboardType="numeric"
                 maxLength={10}
-                value={dataAgendada}
-                onChangeText={handleDataChange}
+                value={dataPrevisao}
+                onChangeText={(texto) => {
+                    const apenasNumeros = texto.replace(/\D/g, '');
+                    let formatada = apenasNumeros;
+                    if (apenasNumeros.length > 2 && apenasNumeros.length <= 4) {
+                        formatada = `${apenasNumeros.slice(0, 2)}/${apenasNumeros.slice(2)}`;
+                    } else if (apenasNumeros.length > 4) {
+                        formatada = `${apenasNumeros.slice(0, 2)}/${apenasNumeros.slice(2, 4)}/${apenasNumeros.slice(4, 8)}`;
+                    }
+                    setDataPrevisao(formatada);
+                }}
             />
 
             <Text style={styles.label}>Montador Responsável Principal *</Text>

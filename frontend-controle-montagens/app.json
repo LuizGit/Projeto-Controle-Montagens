@@ -1,27 +1,30 @@
 {
   "expo": {
-    "name": "frontend-controle-montagens",
+    "name": "Montagens",
     "slug": "frontend-controle-montagens",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.nortfer2026.frontendcontrolemontagens",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fcaf0894-b650-4ae9-a517-36dfaf88132a"
+      }
+    },
+    "owner": "nortfer2026"
   }
 }
